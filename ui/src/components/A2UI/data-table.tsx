@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/table"; // 确保路径对应你的 shadcn 组件位置
 import { Button } from "@/components/ui/button";
 
+const PAGE_SIZE_OPTIONS = [20, 40, 60, 100] as const;
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
@@ -46,7 +48,7 @@ export function DataTable<TData, TValue>({
     // 默认每页条数，可以在这里改
     initialState: {
       pagination: {
-        pageSize: 7,
+        pageSize: PAGE_SIZE_OPTIONS[0],
       },
     },
   });
@@ -106,6 +108,18 @@ export function DataTable<TData, TValue>({
 
       {/* 翻页控制区 */}
       <div className="flex items-center justify-end space-x-2 py-4">
+        <select
+          aria-label="Rows per page"
+          className="h-9 rounded-md border bg-background px-2 text-sm"
+          value={table.getState().pagination.pageSize}
+          onChange={(event) => table.setPageSize(Number(event.target.value))}
+        >
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {size} / page
+            </option>
+          ))}
+        </select>
         <Button
           variant="outline"
           size="sm"

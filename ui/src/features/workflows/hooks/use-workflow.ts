@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Workflow } from "@/types/entity";
 import { useWorkflowStore } from "@/store/workflow";
 import { AssistantsApi, WorkflowsApi } from "@/services/dashboard";
@@ -69,14 +70,6 @@ export function useActiveWorkflow(
     isError,
   } = useWorkflow(api, activeId, workspaceId);
 
-  useEffect(() => {
-    if (workspaceId && workflow && workflow.workspaceId !== workspaceId) {
-      // 如果后端返回了 workflow 的 workspaceId 字段，可以在这里做校验重置
-      // 或者更简单地：在 workspaceId 变化的 useEffect 中重置 store
-      setActiveId(null);
-    }
-  }, [workspaceId, setActiveId]); // 注意：这里逻辑取决于你具体的切换时机
-
   return {
     id: activeId,
     workflow,
@@ -85,6 +78,27 @@ export function useActiveWorkflow(
     setActiveId,
     name: workflow?.name || "Untitled",
   };
+}
+
+/** Apply a workflow name supplied by an external chat URL. */
+export function useApplyWorkflowFromUrl(
+  api: WorkflowsApi,
+  workspaceId: string | undefined,
+) {
+  const workflowName = useSearchParams().get("workflow")?.trim();
+  const { data: workflows } = useWorkflowsList(api, workspaceId);
+  const { setActiveId } = useWorkflowStore();
+
+  useEffect(() => {
+    if (!workflowName || !workflows?.length) return;
+
+    const matchedWorkflow = workflows.find(
+      (workflow) => workflow.name.toLowerCase() === workflowName.toLowerCase(),
+    );
+    if (matchedWorkflow) {
+      setActiveId(matchedWorkflow.id);
+    }
+  }, [workflowName, workflows, setActiveId]);
 }
 
 // --- Mutations ---

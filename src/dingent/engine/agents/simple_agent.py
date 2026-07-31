@@ -1,6 +1,6 @@
 import json
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Any, cast
+from typing import Annotated, Any
 
 from copilotkit import a2ui
 from langchain.agents import create_agent
@@ -31,8 +31,69 @@ def _convert_message_to_dict_with_reasoning_content(message: AnyMessage) -> dict
 langchain_litellm_chat_models._convert_message_to_dict = _convert_message_to_dict_with_reasoning_content
 
 
+def _format_table_value(value: Any) -> str:
+    if isinstance(value, (dict, list)):
+        return json.dumps(value, ensure_ascii=False, default=str)
+    return str(value)
+
+
+def _plain_object_to_table_display(data: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "table",
+            "title": "Results",
+            "columns": ["Property", "Value"],
+            "rows": [[str(key), _format_table_value(value)] for key, value in data.items()],
+        }
+    ]
+
+
+def _parse_json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+
+    candidates: list[str] = []
+    if isinstance(value, str):
+        candidates.append(value)
+    elif isinstance(value, list):
+        for block in value:
+            if isinstance(block, str):
+                candidates.append(block)
+            elif isinstance(block, dict):
+                text = block.get("text")
+                if isinstance(text, str):
+                    candidates.append(text)
+
+    for candidate in candidates:
+        if not candidate.strip():
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except (json.JSONDecodeError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+
+    return {}
+
+
+def _extract_tool_data(content: Any, artifact: Any) -> dict[str, Any]:
+    if isinstance(artifact, dict):
+        data = _parse_json_object(artifact.get("structured_content"))
+        if data:
+            return data
+
+    # Older plugins return their structured payload as JSON text instead of
+    # MCP structured content. Keep accepting that protocol during migration.
+    return _parse_json_object(content)
+
+
 def mcp_artifact_to_agui_display(
-    tool_name: str, query_args: dict[str, Any], surface_base_id: str | list[str], artifact: list[dict[str, Any]], update_data: bool = False
+    tool_name: str,
+    query_args: dict[str, Any],
+    surface_base_id: str | list[str],
+    artifact: dict[str, Any] | list[dict[str, Any]],
+    update_data: bool = False,
 ) -> list[dict[str, Any]]:
     if not isinstance(artifact, list):
         return [artifact]
@@ -220,20 +281,18 @@ class DingMiddleware(AgentMiddleware):
             # --- 分支 A: 处理 ToolMessage ---
             if isinstance(result, ToolMessage):
                 content = result.content
-                artifact = None
-                data = {}
-                if result.artifact:
-                    structured_content = result.artifact["structured_content"]
-                    if isinstance(structured_content, dict):
-                        data = structured_content
-                    elif isinstance(structured_content, str) and structured_content.strip():
-                        try:
-                            data = json.loads(structured_content)
-                        except json.JSONDecodeError:
-                            pass  # 保持默认的 model_text
+                artifact: dict[str, Any] | list[dict[str, Any]] | None = None
+                data = _extract_tool_data(content, result.artifact)
 
                 if isinstance(data, dict) and "display" in data:
-                    artifact = cast(list[dict[str, Any]], data.get("display"))
+                    display = data.get("display")
+                    if isinstance(display, (dict, list)):
+                        artifact = display
+                    model_text = data.get("model_text", content)
+                elif isinstance(data, dict) and data and "model_text" not in data:
+                    artifact = _plain_object_to_table_display(data)
+                    model_text = content
+                elif isinstance(data, dict) and "model_text" in data:
                     model_text = data.get("model_text", content)
                 else:
                     model_text = content

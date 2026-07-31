@@ -11,7 +11,11 @@ vi.mock("@/features/chat/shared/ThinkingAssistantMessage", () => ({
 }));
 
 vi.mock("@copilotkit/react-core/v2", () => {
-  const CopilotChatMessageView = ({ messages }: { messages?: Array<{ id: string; role: string; content?: unknown }> }) => (
+  const CopilotChatMessageView = ({
+    messages,
+  }: {
+    messages?: Array<{ id: string; role: string; content?: unknown }>;
+  }) => (
     <div data-testid="message-view">
       {(messages ?? []).map((message) => (
         <div data-testid="message" data-role={message.role} key={message.id}>
@@ -33,7 +37,12 @@ describe("CopilotChatMessageViewNoActivity", () => {
       <CopilotChatMessageViewNoActivity
         messages={[
           { id: "user-1", role: "user", content: "Question" },
-          { id: "activity-1", role: "activity", content: { type: "table" } },
+          {
+            id: "activity-1",
+            role: "activity",
+            activityType: "a2ui-surface",
+            content: { type: "table" },
+          },
           { id: "assistant-1", role: "assistant", content: "Final answer" },
         ]}
       />,

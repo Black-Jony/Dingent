@@ -195,7 +195,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
   const guestLink = React.useMemo(() => {
     if (!workspace) return "";
     const origin = typeof window !== "undefined" ? window.location.origin : "";
-    return `${origin}/guest/${workspace.slug}/chat`;
+    return `${origin}/dingent-resource/guest/${workspace.slug}/chat`;
   }, [workspace]);
 
   const handleToggleGuestAccess = async (enabled: boolean) => {

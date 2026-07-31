@@ -4,7 +4,14 @@ import {
   useA2UIActions,
 } from "@copilotkit/a2ui-renderer";
 import { z } from "zod";
-import { memo, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  memo,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import remarkGfm from "remark-gfm";
 import ReactMarkdown from "react-markdown";
@@ -55,12 +62,47 @@ interface OfficialA2UIContent {
   surfaceId?: string;
 }
 
+interface LegacyTableContent {
+  title?: string;
+  columns?: unknown[];
+  rows?: Array<Record<string, any> | any[]>;
+}
+
+interface LegacySpeciesButton {
+  org_id: number;
+  name: string;
+  count: number;
+  active?: boolean;
+}
+
+interface LegacyDisplayContent {
+  title?: string;
+  text?: unknown;
+  sankey_image_base64?: string;
+  association_table?: LegacyTableContent;
+  species_overview?: {
+    association_table?: LegacyTableContent;
+    species_buttons?: LegacySpeciesButton[];
+  };
+  summary?: {
+    mode?: string;
+    trait_name?: string;
+    species_name?: string;
+    species_filter?: string;
+  };
+  data?: { mode?: string };
+}
+
 function normalizeTableContent(content: TableContent): TableContent {
-  const columns = Array.isArray(content.columns) ? content.columns.map(String) : [];
+  const columns = Array.isArray(content.columns)
+    ? content.columns.map(String)
+    : [];
   const rows = Array.isArray(content.rows)
     ? content.rows.map((row) => {
         if (Array.isArray(row)) {
-          return Object.fromEntries(columns.map((column, index) => [column, row[index]]));
+          return Object.fromEntries(
+            columns.map((column, index) => [column, row[index]]),
+          );
         }
 
         return row && typeof row === "object" ? row : {};
@@ -68,6 +110,69 @@ function normalizeTableContent(content: TableContent): TableContent {
     : [];
 
   return { ...content, columns, rows };
+}
+
+function formatCellValue(value: unknown): string {
+  if (value == null) return "-";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function renderCellValue(value: unknown): ReactNode {
+  if (
+    value &&
+    typeof value === "object" &&
+    "href" in value &&
+    "text" in value
+  ) {
+    const href = String((value as { href: unknown }).href);
+    const text = String((value as { text: unknown }).text);
+    if (/^https?:\/\//i.test(href)) {
+      return (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline"
+        >
+          {text}
+        </a>
+      );
+    }
+    return text;
+  }
+
+  const text = formatCellValue(value);
+  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+  const parts: ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkPattern.exec(text)) !== null) {
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
+    parts.push(
+      <a
+        key={`${match.index}-${match[2]}`}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 hover:underline"
+      >
+        {match[1]}
+      </a>,
+    );
+    lastIndex = linkPattern.lastIndex;
+  }
+
+  if (parts.length === 0) return text;
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+  return parts;
 }
 
 function ErrorFallback({
@@ -119,7 +224,7 @@ function TableView({ data }: { data: TableContent }) {
         cell: ({ row }) => {
           try {
             const value = row.getValue(colName);
-            return <div className="font-medium">{String(value ?? "-")}</div>;
+            return <div className="font-medium">{renderCellValue(value)}</div>;
           } catch (e) {
             return <span className="text-red-400 text-xs">Error</span>;
           }
@@ -152,6 +257,133 @@ function TableView({ data }: { data: TableContent }) {
     </div>
   );
 }
+
+function toLegacyTable(
+  table: LegacyTableContent | undefined,
+  fallbackTitle: string,
+): TableContent | null {
+  if (!table) return null;
+  const columns = Array.isArray(table.columns) ? table.columns.map(String) : [];
+  const rows = Array.isArray(table.rows) ? table.rows : [];
+  if (columns.length === 0) return null;
+
+  return {
+    type: "table",
+    title: table.title || fallbackTitle,
+    columns,
+    rows,
+  };
+}
+
+function getActiveSpeciesName(content: LegacyDisplayContent): string {
+  const summarySpecies = content.summary?.species_name?.trim();
+  if (summarySpecies) return summarySpecies;
+
+  const summaryFilter = content.summary?.species_filter?.trim();
+  if (summaryFilter) return summaryFilter;
+
+  const buttons = content.species_overview?.species_buttons;
+  const active = buttons?.find((species) => species.active);
+  return String(active?.name || buttons?.[0]?.name || "").trim();
+}
+
+function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
+  const imageBase64 = content.sankey_image_base64;
+  const speciesButtons = content.species_overview?.species_buttons;
+  const mode = content.summary?.mode ?? content.data?.mode;
+  const isTraitMode = mode === "trait";
+  const activeSpeciesName = getActiveSpeciesName(content);
+  const title = content.summary?.trait_name ?? content.title;
+  const resultTable = toLegacyTable(content.association_table, "Results");
+  const overviewTable = toLegacyTable(
+    content.species_overview?.association_table,
+    activeSpeciesName ? `Species (${activeSpeciesName})` : "Species",
+  );
+
+  const handleSwitchSpecies = (species: LegacySpeciesButton) => {
+    window.dispatchEvent(
+      new CustomEvent("gwas-switch-species", {
+        detail: { speciesName: species.name, orgId: species.org_id },
+      }),
+    );
+  };
+
+  if (!imageBase64 && !resultTable && !overviewTable && content.text != null) {
+    return (
+      <MarkdownView
+        data={{ type: "markdown", title, content: String(content.text) }}
+      />
+    );
+  }
+
+  const imageSrc = imageBase64?.startsWith("data:")
+    ? imageBase64
+    : imageBase64
+      ? `data:image/png;base64,${imageBase64}`
+      : null;
+
+  return (
+    <div className="w-full my-4 space-y-4">
+      {!isTraitMode && speciesButtons && speciesButtons.length > 0 && (
+        <div className="rounded-md border px-3 py-3">
+          <div className="mb-2 text-sm font-medium text-gray-700">Species</div>
+          <div className="flex flex-wrap gap-2">
+            {speciesButtons.map((species) => (
+              <Button
+                key={`${species.org_id}-${species.name}`}
+                size="sm"
+                variant={species.active ? "default" : "outline"}
+                className={
+                  species.active ? "bg-green-600 hover:bg-green-700" : ""
+                }
+                onClick={() => handleSwitchSpecies(species)}
+              >
+                {`${species.name} (${species.count})`}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!isTraitMode && overviewTable && <TableView data={overviewTable} />}
+
+      {imageSrc && (
+        <div className="space-y-2">
+          {title && (
+            <h3 className="text-lg font-semibold tracking-tight px-1">
+              {title}
+            </h3>
+          )}
+          <PhotoProvider maskOpacity={0.8}>
+            <PhotoView src={imageSrc}>
+              <img
+                src={imageSrc}
+                alt={title || "Sankey Diagram"}
+                className="max-w-full h-auto rounded border cursor-zoom-in"
+              />
+            </PhotoView>
+          </PhotoProvider>
+        </div>
+      )}
+
+      {resultTable && <TableView data={resultTable} />}
+
+      {!imageSrc && !resultTable && !overviewTable && (
+        <div className="p-4 text-gray-500 italic">No data to display.</div>
+      )}
+    </div>
+  );
+}
+
+function isLegacyDisplayContent(content: Record<string, any>): boolean {
+  return (
+    "association_table" in content ||
+    "sankey_image_base64" in content ||
+    "species_overview" in content ||
+    ("text" in content && !("type" in content))
+  );
+}
+
 const PreviewImage = (props: any) => {
   const { src, alt, title, ...rest } = props;
   if (!src) return null;
@@ -356,6 +588,10 @@ export function createA2UIMessageRenderer(
           theme={options.theme}
         />
       );
+    }
+
+    if (isLegacyDisplayContent(content)) {
+      return <LegacyDisplayView content={content as LegacyDisplayContent} />;
     }
 
     const typedContent = content as A2UIContent;

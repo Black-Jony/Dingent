@@ -11,13 +11,24 @@ import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
 vi.mock("@copilotkit/react-core/v2", () => ({
   useRenderActivityMessage: () => {
     const renderer = createA2UIMessageRenderer({});
+    const RenderActivity = renderer.render;
     // The CopilotKit SDK dispatches to the renderer by activityType.
     // The renderer receives { content: message.content } as props.
     return {
-      renderActivityMessage: (message: { id: string; activityType: string; content: any }) => {
+      renderActivityMessage: (message: {
+        id: string;
+        activityType: string;
+        content: any;
+      }) => {
         if (message.activityType === "a2ui-surface") {
-          // Call the render function directly with the content prop
-          return renderer.render({ content: message.content });
+          return (
+            <RenderActivity
+              activityType={message.activityType}
+              content={message.content}
+              message={message}
+              agent={{}}
+            />
+          );
         }
         return <div>Unknown activity type: {message.activityType}</div>;
       },
@@ -27,8 +38,12 @@ vi.mock("@copilotkit/react-core/v2", () => ({
 
 // The A2UI renderer imports from these — mock minimally
 vi.mock("@copilotkit/a2ui-renderer", () => ({
-  A2UIProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="a2ui-provider">{children}</div>,
-  A2UIRenderer: ({ surfaceId }: { surfaceId: string }) => <div data-testid={`a2ui-surface-${surfaceId}`}>{surfaceId}</div>,
+  A2UIProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="a2ui-provider">{children}</div>
+  ),
+  A2UIRenderer: ({ surfaceId }: { surfaceId: string }) => (
+    <div data-testid={`a2ui-surface-${surfaceId}`}>{surfaceId}</div>
+  ),
   useA2UIActions: () => ({
     processMessages: vi.fn(),
   }),
@@ -38,7 +53,9 @@ vi.mock("@copilotkit/a2ui-renderer", () => ({
 vi.mock("@/components/A2UI/data-table", () => ({
   DataTable: ({ columns, data }: { columns: any[]; data: any[] }) => (
     <div data-testid="datatable">
-      <div data-testid="table-columns">{columns.map((c: any) => c.accessorKey || c).join(",")}</div>
+      <div data-testid="table-columns">
+        {columns.map((c: any) => c.accessorKey || c).join(",")}
+      </div>
       <div data-testid="table-rows">{JSON.stringify(data)}</div>
     </div>
   ),
@@ -55,7 +72,9 @@ vi.mock("@/components/ui/table", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, ...props }: any) => (
+    <button {...props}>{children}</button>
+  ),
 }));
 
 /* ── Tests ───────────────────────────────────────────────────── */
@@ -99,7 +118,12 @@ describe("CopilotChatActivityList integration with real renderer", () => {
         role: "activity" as const,
         activityType: "a2ui-surface",
         content: {
-          a2ui_operations: [{ version: "v0.9", createSurface: { surfaceId: "call_table-0", catalogId: [] } }],
+          a2ui_operations: [
+            {
+              version: "v0.9",
+              createSurface: { surfaceId: "call_table-0", catalogId: [] },
+            },
+          ],
           surfaceId: "call_table-0",
         },
       },
@@ -123,7 +147,10 @@ describe("CopilotChatActivityList integration with real renderer", () => {
           type: "table",
           title: "Scores",
           columns: ["name", "score"],
-          rows: [["Alice", "95"], ["Bob", "87"]],
+          rows: [
+            ["Alice", "95"],
+            ["Bob", "87"],
+          ],
         },
       },
     ];
@@ -146,14 +173,23 @@ describe("CopilotChatActivityList integration with real renderer", () => {
         id: "call_multi:activity:0",
         role: "activity" as const,
         activityType: "a2ui-surface",
-        content: { type: "markdown", title: "Summary", content: "Found **2 records**." },
+        content: {
+          type: "markdown",
+          title: "Summary",
+          content: "Found **2 records**.",
+        },
       },
       {
         id: "call_multi:activity:1",
         role: "activity" as const,
         activityType: "a2ui-surface",
         content: {
-          a2ui_operations: [{ version: "v0.9", createSurface: { surfaceId: "call_table-0", catalogId: [] } }],
+          a2ui_operations: [
+            {
+              version: "v0.9",
+              createSurface: { surfaceId: "call_table-0", catalogId: [] },
+            },
+          ],
           surfaceId: "call_table-0",
         },
       },
@@ -174,9 +210,29 @@ describe("CopilotChatActivityList integration with real renderer", () => {
 
   it("handles todo_list messages by showing only the last one", () => {
     const messages = [
-      { id: "todo-1", role: "activity" as const, activityType: "a2ui-surface", content: { type: "todo_list", label: "First todo" } },
-      { id: "table-1", role: "activity" as const, activityType: "a2ui-surface", content: { type: "table", title: "Data", columns: ["x"], rows: [["1"]] } },
-      { id: "todo-2", role: "activity" as const, activityType: "a2ui-surface", content: { type: "todo_list", label: "Last todo" } },
+      {
+        id: "todo-1",
+        role: "activity" as const,
+        activityType: "a2ui-surface",
+        content: { type: "todo_list", label: "First todo" },
+      },
+      {
+        id: "table-1",
+        role: "activity" as const,
+        activityType: "a2ui-surface",
+        content: {
+          type: "table",
+          title: "Data",
+          columns: ["x"],
+          rows: [["1"]],
+        },
+      },
+      {
+        id: "todo-2",
+        role: "activity" as const,
+        activityType: "a2ui-surface",
+        content: { type: "todo_list", label: "Last todo" },
+      },
     ];
 
     render(<CopilotChatActivityList messages={messages} />);
@@ -211,7 +267,12 @@ describe("CopilotChatActivityList integration with real renderer", () => {
 
   it("handles null/undefined content gracefully", () => {
     const messages = [
-      { id: "null-content", role: "activity" as const, activityType: "a2ui-surface", content: null as any },
+      {
+        id: "null-content",
+        role: "activity" as const,
+        activityType: "a2ui-surface",
+        content: null as any,
+      },
     ];
 
     render(<CopilotChatActivityList messages={messages} />);

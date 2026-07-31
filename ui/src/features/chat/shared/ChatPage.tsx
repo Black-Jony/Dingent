@@ -1,8 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "next/navigation";
-import { useAgent, CopilotSidebar } from "@copilotkit/react-core/v2";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
+import {
+  useAgent,
+  CopilotSidebar,
+  useCopilotKit,
+  type CopilotChatMessageViewProps,
+  type Message,
+} from "@copilotkit/react-core/v2";
 import { useRenderToolCall } from "@copilotkit/react-core";
 
 import { Check, CheckCircle2, Loader2 } from "lucide-react";
@@ -12,7 +30,10 @@ import { useThreadContext } from "@/providers/ThreadProvider";
 import { ChatHeader } from "@/features/chat/chat-header";
 import { CopilotChatMessageViewNoActivity } from "@/components/CopilotChatMessageViewNoActivity";
 import { CopilotChatActivityList } from "@/components/CopilotChatActivityMessage";
-import { useActiveWorkflow } from "@/features/workflows/hooks";
+import {
+  useActiveWorkflow,
+  useApplyWorkflowFromUrl,
+} from "@/features/workflows/hooks";
 import { getClientApi } from "@/lib/api/client";
 import { ThinkingProvider, useThinking } from "@/providers/ThinkingProvider";
 import { TodoListView } from "@/components/common/todo-list-view";
@@ -45,7 +66,9 @@ interface ChatTimingStats {
 }
 
 function elapsedMs(startMs: number, endMs?: number) {
-  return typeof endMs === "number" ? Math.round((endMs - startMs) * 100) / 100 : null;
+  return typeof endMs === "number"
+    ? Math.round((endMs - startMs) * 100) / 100
+    : null;
 }
 
 function getDeltaLength(delta: unknown) {
@@ -58,22 +81,60 @@ function shouldThrowOnActivitySnapshot() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("debugActivitySnapshot") === "throw") return true;
 
-  return window.localStorage.getItem("dingent.debugActivitySnapshot") === "throw";
+  return (
+    window.localStorage.getItem("dingent.debugActivitySnapshot") === "throw"
+  );
 }
 
 function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const queryParam = searchParams.get("query")?.trim() || "";
+  const workflowParam = searchParams.get("workflow")?.trim() || "";
+  const handledQueryRef = useRef<string | null>(null);
+  const handledWorkflowRef = useRef<string | null>(null);
+
   const api = getClientApi().forWorkspace(slug, { isGuest, visitorId });
+  useApplyWorkflowFromUrl(api.workflows, slug);
   const { workflow } = useActiveWorkflow(api.workflows, slug);
 
   const { activeThreadId, updateThreadTitle } = useThreadContext();
 
   const agentName = workflow?.name || "default";
   const agent = useAgent({ agentId: agentName });
+  const { copilotkit } = useCopilotKit();
   const isAgentRunning = agent.agent.isRunning;
   const messages = agent.agent.messages;
+  const [urlQuestionMessage, setUrlQuestionMessage] = useState<{
+    threadId: string;
+    message: Message;
+  } | null>(null);
+  const [isUrlAutoAsking, setIsUrlAutoAsking] = useState(false);
+  const activeThreadIdRef = useRef(activeThreadId);
+  const urlQuestionMessageRef = useRef(urlQuestionMessage);
+  const isUrlAutoAskingRef = useRef(isUrlAutoAsking);
+
+  activeThreadIdRef.current = activeThreadId;
+  urlQuestionMessageRef.current = urlQuestionMessage;
+  isUrlAutoAskingRef.current = isUrlAutoAsking;
+
+  const removeLaunchParams = useCallback(() => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("workflow");
+    nextParams.delete("query");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, {
+      scroll: false,
+    });
+  }, [pathname, router, searchParams]);
   const timingStatsRef = useRef<ChatTimingStats | null>(null);
-  const snapshotActivityMessages = messages.filter((m) => m.role === "activity");
-  const [streamingActivityMessages, setStreamingActivityMessages] = useState<any[]>([]);
+  const snapshotActivityMessages = messages.filter(
+    (m) => m.role === "activity",
+  );
+  const [streamingActivityMessages, setStreamingActivityMessages] = useState<
+    any[]
+  >([]);
   const activityMessages = useMemo(() => {
     const merged = new Map<string, any>();
     for (const message of streamingActivityMessages) {
@@ -86,7 +147,13 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
   }, [snapshotActivityMessages, streamingActivityMessages]);
   const [todos, setTodos] = useState(null);
 
-  const { appendThinkingText, clearThinkingText, isThinking, setIsThinking, thinkingText } = useThinking();
+  const {
+    appendThinkingText,
+    clearThinkingText,
+    isThinking,
+    setIsThinking,
+    thinkingText,
+  } = useThinking();
   useRenderToolCall(
     {
       name: "write_todos",
@@ -174,7 +241,10 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
         timeToFirstActivityMs: elapsedMs(baselineMs, stats.firstActivityAtMs),
         timeToFirstTextStartMs: elapsedMs(baselineMs, stats.firstTextStartAtMs),
         timeToFirstTokenMs: elapsedMs(baselineMs, stats.firstTokenAtMs),
-        textStreamDurationMs: elapsedMs(stats.firstTokenAtMs ?? baselineMs, stats.finishedAtMs),
+        textStreamDurationMs: elapsedMs(
+          stats.firstTokenAtMs ?? baselineMs,
+          stats.finishedAtMs,
+        ),
         textDeltaCount: stats.textDeltaCount,
         textCharCount: stats.textCharCount,
         thinkingDeltaCount: stats.thinkingDeltaCount,
@@ -193,17 +263,24 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       const messageId = activityEvent.messageId || activityEvent.message_id;
       if (messageId && activityEvent.content) {
         if (shouldThrowOnActivitySnapshot()) {
-          throw new Error(`Received ACTIVITY_SNAPSHOT activity message: ${messageId}`);
+          throw new Error(
+            `Received ACTIVITY_SNAPSHOT activity message: ${messageId}`,
+          );
         }
 
         setStreamingActivityMessages((prevMessages) => {
-          const nextMessages = prevMessages.filter((message) => message.id !== messageId);
+          const nextMessages = prevMessages.filter(
+            (message) => message.id !== messageId,
+          );
           return [
             ...nextMessages,
             {
               id: messageId,
               role: "activity",
-              activityType: activityEvent.activityType || activityEvent.activity_type || "a2ui-surface",
+              activityType:
+                activityEvent.activityType ||
+                activityEvent.activity_type ||
+                "a2ui-surface",
               content: activityEvent.content,
             },
           ];
@@ -245,7 +322,11 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
         } else if (event.type === "THINKING_START") {
           clearThinkingText();
           setIsThinking(true);
-        } else if (event.type === "THINKING_END" || event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
+        } else if (
+          event.type === "THINKING_END" ||
+          event.type === "RUN_FINISHED" ||
+          event.type === "RUN_ERROR"
+        ) {
           setIsThinking(false);
         }
         if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
@@ -255,15 +336,143 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       },
     };
 
-    const subscription = agent.agent.subscribe(thinkingSubscriber as Parameters<typeof agent.agent.subscribe>[0]);
+    const subscription = agent.agent.subscribe(
+      thinkingSubscriber as Parameters<typeof agent.agent.subscribe>[0],
+    );
     return () => subscription.unsubscribe();
-  }, [activeThreadId, agent.agent, agentName, appendThinkingText, clearThinkingText, setIsThinking]);
+  }, [
+    activeThreadId,
+    agent.agent,
+    agentName,
+    appendThinkingText,
+    clearThinkingText,
+    setIsThinking,
+  ]);
 
   useEffect(() => {
     if (activeThreadId) {
       updateThreadTitle();
     }
   }, [isAgentRunning, activeThreadId, updateThreadTitle]);
+
+  useEffect(() => {
+    const handleSwitchSpecies = async (event: Event) => {
+      const speciesName = (
+        (event as CustomEvent<{ speciesName?: string }>).detail?.speciesName ||
+        ""
+      ).trim();
+      if (!speciesName || !activeThreadId || agent.agent.isRunning) return;
+
+      try {
+        agent.agent.threadId = activeThreadId;
+        agent.agent.addMessage({
+          id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          role: "user",
+          content: `query species = ${speciesName}`,
+        } as Message);
+        await copilotkit.runAgent({ agent: agent.agent });
+      } catch (error) {
+        console.error("gwas switch species failed", error);
+      }
+    };
+
+    window.addEventListener("gwas-switch-species", handleSwitchSpecies);
+    return () => {
+      window.removeEventListener("gwas-switch-species", handleSwitchSpecies);
+    };
+  }, [activeThreadId, agent.agent, copilotkit]);
+
+  useEffect(() => {
+    if (!queryParam || !activeThreadId || agent.agent.isRunning) return;
+    if (
+      workflowParam &&
+      workflow?.name.toLowerCase() !== workflowParam.toLowerCase()
+    ) {
+      return;
+    }
+
+    const launchKey = `${activeThreadId}:${workflowParam}:${queryParam}`;
+    if (handledQueryRef.current === launchKey) return;
+    handledQueryRef.current = launchKey;
+
+    const runUrlQuestion = async () => {
+      const userMessage: Message = {
+        id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role: "user",
+        content: queryParam,
+      };
+
+      try {
+        setUrlQuestionMessage({
+          threadId: activeThreadId,
+          message: userMessage,
+        });
+        setIsUrlAutoAsking(true);
+        agent.agent.threadId = activeThreadId;
+        agent.agent.addMessage(userMessage);
+        removeLaunchParams();
+        await copilotkit.runAgent({ agent: agent.agent });
+      } catch (error) {
+        console.error("auto-ask from url failed", error);
+      } finally {
+        setIsUrlAutoAsking(false);
+      }
+    };
+
+    void runUrlQuestion();
+  }, [
+    activeThreadId,
+    agent.agent,
+    copilotkit,
+    queryParam,
+    removeLaunchParams,
+    workflow,
+    workflowParam,
+  ]);
+
+  useEffect(() => {
+    if (queryParam || !workflowParam || !activeThreadId) return;
+    if (workflow?.name.toLowerCase() !== workflowParam.toLowerCase()) return;
+
+    const launchKey = `${activeThreadId}:${workflowParam}`;
+    if (handledWorkflowRef.current === launchKey) return;
+    handledWorkflowRef.current = launchKey;
+    removeLaunchParams();
+  }, [activeThreadId, queryParam, removeLaunchParams, workflow, workflowParam]);
+
+  const messageView = useMemo(() => {
+    const UrlAwareMessageView = ((props: CopilotChatMessageViewProps) => {
+      const currentThreadId = activeThreadIdRef.current;
+      const urlQuestion = urlQuestionMessageRef.current;
+      const visibleMessages =
+        props.messages?.filter((message) => message.role !== "activity") || [];
+      const shouldShowUrlQuestion =
+        urlQuestion?.threadId === currentThreadId &&
+        !visibleMessages.some(
+          (message) =>
+            message.role === "user" &&
+            (message.id === urlQuestion.message.id ||
+              message.content === urlQuestion.message.content),
+        );
+      const shouldShowUrlRunning =
+        isUrlAutoAskingRef.current && urlQuestion?.threadId === currentThreadId;
+
+      return (
+        <CopilotChatMessageViewNoActivity
+          {...props}
+          isRunning={props.isRunning || shouldShowUrlRunning}
+          messages={
+            shouldShowUrlQuestion
+              ? [urlQuestion.message, ...visibleMessages]
+              : visibleMessages
+          }
+        />
+      );
+    }) as typeof CopilotChatMessageViewNoActivity;
+
+    UrlAwareMessageView.Cursor = CopilotChatMessageViewNoActivity.Cursor;
+    return UrlAwareMessageView;
+  }, []);
 
   if (isGuest && !visitorId) {
     return (
@@ -288,7 +497,11 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
         "
       >
         {(isThinking || thinkingText) && (
-          <ThinkingAccordion content={thinkingText} isThinking={isThinking} label="Thinking Process..." />
+          <ThinkingAccordion
+            content={thinkingText}
+            isThinking={isThinking}
+            label="Thinking Process..."
+          />
         )}
         {todos && <TodoListView key={activeThreadId} data={todos} />}
         <CopilotChatActivityList messages={activityMessages} />
@@ -296,7 +509,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       <CopilotSidebar
         agentId={workflow?.name}
         threadId={activeThreadId}
-        messageView={CopilotChatMessageViewNoActivity}
+        messageView={messageView}
         header={ChatHeader as any}
       />
     </main>
@@ -309,7 +522,15 @@ export function ChatPage({ isGuest = false, visitorId }: ChatPageProps) {
 
   return (
     <ThinkingProvider>
-      <ChatPageContent isGuest={isGuest} visitorId={visitorId} slug={slug} />
+      <Suspense
+        fallback={
+          <div className="flex h-screen w-full items-center justify-center">
+            <Loader2 className="animate-spin text-muted-foreground" />
+          </div>
+        }
+      >
+        <ChatPageContent isGuest={isGuest} visitorId={visitorId} slug={slug} />
+      </Suspense>
     </ThinkingProvider>
   );
 }

@@ -1,25 +1,44 @@
 import { expect, test } from "@playwright/test";
 
 const visitorId = "018f4d80-0000-7000-8000-000000000001";
+const backendPort = Number(process.env.E2E_BACKEND_PORT ?? 8765);
 
-test("guest chat completes a real browser/backend flow and can switch conversations", async ({ page, request }) => {
+test("guest chat completes a real browser/backend flow and can switch conversations", async ({
+  page,
+  request,
+}) => {
   await page.addInitScript((id) => {
     window.localStorage.setItem("dingent_visitor_id", id);
-    window.localStorage.setItem("currentChatThreadId", "");
+    window.localStorage.setItem(`currentChatThreadId:playwright-e2e:${id}`, "");
   }, visitorId);
 
-  await page.goto("/dingent/web/guest/playwright-e2e/chat");
+  await page.goto(
+    "/dingent-resource/guest/playwright-e2e/chat?workflow=playwright-e2e-flow",
+  );
 
   await expect(page.getByText("New Chat").first()).toBeVisible();
+  await page.waitForURL(/\/guest\/playwright-e2e\/chat$/);
 
   const input = page.getByRole("textbox").last();
   await input.fill("Get data and analyze it from the browser");
-  await input.press("Enter");
+  const sendButton = page.getByTestId("copilot-send-button");
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
 
-  await expect(page.getByText("Reviewer final answer: browser e2e completed with mocked LLM output.")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("Get data and analyze it from the browser")).toBeVisible();
+  await expect(
+    page.getByText(
+      "Reviewer final answer: browser e2e completed with mocked LLM output.",
+    ),
+  ).toBeVisible({ timeout: 30_000 });
+  await expect(
+    page
+      .getByTestId("copilot-user-message")
+      .getByText("Get data and analyze it from the browser"),
+  ).toBeVisible();
 
-  const state = await request.get("http://127.0.0.1:8765/api/v1/__e2e__/state");
+  const state = await request.get(
+    `http://127.0.0.1:${backendPort}/api/v1/__e2e__/state`,
+  );
   await expect(state).toBeOK();
   const payload = await state.json();
   expect(payload.boundToolNames).toEqual([
@@ -28,15 +47,33 @@ test("guest chat completes a real browser/backend flow and can switch conversati
     ["write_todos"],
   ]);
   expect(payload.receivedMessages).toHaveLength(3);
-  expect(JSON.stringify(payload.receivedMessages[0])).toContain("Get data and analyze it from the browser");
+  expect(JSON.stringify(payload.receivedMessages[0])).toContain(
+    "Get data and analyze it from the browser",
+  );
 
   await page.getByText("New Chat").first().click();
-  await expect(page.getByText("Reviewer final answer: browser e2e completed with mocked LLM output.")).not.toBeVisible();
+  await expect(
+    page.getByText(
+      "Reviewer final answer: browser e2e completed with mocked LLM output.",
+    ),
+  ).not.toBeVisible();
 
   await input.fill("Start a second browser conversation");
-  await input.press("Enter");
-  await expect(page.getByText("Start a second browser conversation")).toBeVisible();
+  await expect(sendButton).toBeEnabled();
+  await sendButton.click();
+  await expect(
+    page
+      .getByTestId("copilot-user-message")
+      .getByText("Start a second browser conversation"),
+  ).toBeVisible();
 
-  await page.getByText("Get data and analyze it from the browser").first().click();
-  await expect(page.getByText("Reviewer final answer: browser e2e completed with mocked LLM output.")).toBeVisible({ timeout: 30_000 });
+  await page
+    .getByText("Get data and analyze it from the browser")
+    .first()
+    .click();
+  await expect(
+    page.getByText(
+      "Reviewer final answer: browser e2e completed with mocked LLM output.",
+    ),
+  ).toBeVisible({ timeout: 30_000 });
 });

@@ -1,17 +1,23 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
 
 const processMessages = vi.fn();
 
 vi.mock("@copilotkit/a2ui-renderer", () => ({
-  A2UIProvider: ({ children }: { children: React.ReactNode }) => <div data-testid="a2ui-provider">{children}</div>,
-  A2UIRenderer: ({ surfaceId }: { surfaceId: string }) => <div data-testid="a2ui-renderer">{surfaceId}</div>,
+  A2UIProvider: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="a2ui-provider">{children}</div>
+  ),
+  A2UIRenderer: ({ surfaceId }: { surfaceId: string }) => (
+    <div data-testid="a2ui-renderer">{surfaceId}</div>
+  ),
   useA2UIActions: () => ({ processMessages }),
 }));
 
 vi.mock("react-photo-view", () => ({
-  PhotoProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  PhotoProvider: ({ children }: { children: React.ReactNode }) => (
+    <>{children}</>
+  ),
   PhotoView: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
@@ -28,21 +34,46 @@ vi.mock("./A2UI/data-table", () => ({
 describe("createA2UIMessageRenderer", () => {
   it("routes official A2UI operations through the official provider and renderer", async () => {
     const renderer = createA2UIMessageRenderer({});
-    const operations = [{ createSurface: { surfaceId: "surface-1" } }, { updateDataModel: { surfaceId: "surface-1", value: { title: "Result" } } }];
+    const operations = [
+      { createSurface: { surfaceId: "surface-1" } },
+      {
+        updateDataModel: { surfaceId: "surface-1", value: { title: "Result" } },
+      },
+    ];
     const Render = renderer.render;
 
-    render(<Render activityType="a2ui-surface" content={{ a2ui_operations: operations }} message={{}} agent={{}} />);
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{ a2ui_operations: operations }}
+        message={{}}
+        agent={{}}
+      />,
+    );
 
     expect(screen.getByTestId("a2ui-provider")).toBeInTheDocument();
     expect(screen.getByTestId("a2ui-renderer")).toHaveTextContent("surface-1");
-    await waitFor(() => expect(processMessages).toHaveBeenCalledWith(operations));
+    await waitFor(() =>
+      expect(processMessages).toHaveBeenCalledWith(operations),
+    );
   });
 
   it("keeps the legacy table renderer as a fallback for persisted activity messages", () => {
     const renderer = createA2UIMessageRenderer({});
     const Render = renderer.render;
 
-    render(<Render activityType="a2ui-surface" content={{ type: "table", columns: ["name"], rows: [{ name: "Alice" }] }} message={{}} agent={{}} />);
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          type: "table",
+          columns: ["name"],
+          rows: [{ name: "Alice" }],
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
 
     expect(screen.getByTestId("legacy-table")).toHaveTextContent("1 rows");
   });
@@ -51,18 +82,109 @@ describe("createA2UIMessageRenderer", () => {
     const renderer = createA2UIMessageRenderer({});
     const Render = renderer.render;
 
-    render(<Render activityType="a2ui-surface" content={[{ type: "table", columns: ["name"], rows: [{ name: "Alice" }] }]} message={{}} agent={{}} />);
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={[
+          { type: "table", columns: ["name"], rows: [{ name: "Alice" }] },
+        ]}
+        message={{}}
+        agent={{}}
+      />,
+    );
 
-    expect(screen.getByTestId("legacy-table")).toHaveTextContent("1 rows Alice");
+    expect(screen.getByTestId("legacy-table")).toHaveTextContent(
+      "1 rows Alice",
+    );
   });
 
   it("normalizes legacy table rows from arrays to records", () => {
     const renderer = createA2UIMessageRenderer({});
     const Render = renderer.render;
 
-    render(<Render activityType="a2ui-surface" content={{ type: "table", columns: ["name"], rows: [["Alice"]] }} message={{}} agent={{}} />);
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{ type: "table", columns: ["name"], rows: [["Alice"]] }}
+        message={{}}
+        agent={{}}
+      />,
+    );
 
-    expect(screen.getByTestId("legacy-table")).toHaveTextContent("1 rows Alice");
+    expect(screen.getByTestId("legacy-table")).toHaveTextContent(
+      "1 rows Alice",
+    );
+  });
+
+  it("renders the association_table protocol used by deployed plugins", () => {
+    const renderer = createA2UIMessageRenderer({});
+    const Render = renderer.render;
+
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          association_table: {
+            columns: ["name"],
+            rows: [["AlphaFold"]],
+          },
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Results" }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("legacy-table")).toHaveTextContent("AlphaFold");
+  });
+
+  it("renders GWAS Sankey content and dispatches species switches", () => {
+    const renderer = createA2UIMessageRenderer({});
+    const Render = renderer.render;
+    const onSpeciesSwitch = vi.fn();
+    window.addEventListener("gwas-switch-species", onSpeciesSwitch);
+
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          sankey_image_base64: "aW1hZ2U=",
+          summary: {
+            mode: "species",
+            species_name: "Human",
+            trait_name: "Plant height",
+          },
+          association_table: { columns: ["trait"], rows: [["height"]] },
+          species_overview: {
+            association_table: { columns: ["species"], rows: [["Human"]] },
+            species_buttons: [
+              { org_id: 9606, name: "Human", count: 10, active: true },
+              { org_id: 10090, name: "Mouse", count: 4 },
+            ],
+          },
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+
+    expect(screen.getByRole("img", { name: "Plant height" })).toHaveAttribute(
+      "src",
+      "data:image/png;base64,aW1hZ2U=",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Species (Human)" }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mouse (4)" }));
+    expect(onSpeciesSwitch).toHaveBeenCalledTimes(1);
+    expect((onSpeciesSwitch.mock.calls[0][0] as CustomEvent).detail).toEqual({
+      speciesName: "Mouse",
+      orgId: 10090,
+    });
+
+    window.removeEventListener("gwas-switch-species", onSpeciesSwitch);
   });
 
   it("renders markdown activity content with GFM tables", () => {
@@ -72,7 +194,11 @@ describe("createA2UIMessageRenderer", () => {
     render(
       <Render
         activityType="a2ui-surface"
-        content={{ type: "markdown", title: "Result", content: "| Name | Score |\n| --- | ---: |\n| Alice | 95 |" }}
+        content={{
+          type: "markdown",
+          title: "Result",
+          content: "| Name | Score |\n| --- | ---: |\n| Alice | 95 |",
+        }}
         message={{}}
         agent={{}}
       />,

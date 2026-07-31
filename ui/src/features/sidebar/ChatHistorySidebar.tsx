@@ -1,7 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Trash2,
   Plus,
   MessageSquare,
@@ -32,7 +35,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useWorkspaceApi } from "@/hooks/use-workspace-api";
 import { Workspace } from "@/types/entity";
@@ -87,6 +90,17 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
   const pathname = usePathname();
 
   const groupedThreads = useMemo(() => groupThreadsByDate(threads), [threads]);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [collapsedGroups, setCollapsedGroups] = useState<
+    Record<string, boolean>
+  >({});
+
+  const toggleGroup = (label: string) => {
+    setCollapsedGroups((previous) => ({
+      ...previous,
+      [label]: !previous[label],
+    }));
+  };
 
   const handleNewChat = () => {
     createThread();
@@ -109,123 +123,167 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
   const isGuestMode = pathname.startsWith("/guest/");
 
   return (
-    <AppSidebar workspaces={workspaces} isGuest={isGuestMode}>
+    <AppSidebar
+      workspaces={workspaces}
+      isGuest={isGuestMode}
+      collapsed={isSidebarCollapsed}
+    >
       {/* --- 区域 1: 头部 --- */}
-      <SidebarHeader className="p-4 pb-0">
+      <SidebarHeader className="p-3 pb-0">
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              onClick={handleNewChat}
-              className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.98] transition-all"
+              aria-label={
+                isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
+              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+              className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
             >
-              <Plus className="mr-2 size-4 text-muted-foreground" />
-              <span className="font-medium">New Chat</span>
+              {isSidebarCollapsed ? (
+                <ChevronRight className="size-4" />
+              ) : (
+                <ChevronLeft className="size-4" />
+              )}
+              {!isSidebarCollapsed && (
+                <span className="font-medium">Collapse</span>
+              )}
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {!isSidebarCollapsed && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                size="lg"
+                onClick={handleNewChat}
+                className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.98] transition-all"
+              >
+                <Plus className="mr-2 size-4 text-muted-foreground" />
+                <span className="font-medium">New Chat</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </SidebarHeader>
 
       {/* --- 区域 2: 内容区 --- */}
-      <SidebarContent className="px-2 scrollbar-thin scrollbar-thumb-sidebar-border scrollbar-track-transparent">
-        {threads.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground/60">
-            <MessageSquare className="mb-2 size-8 opacity-20" />
-            <p>No history yet</p>
-          </div>
-        ) : (
-          groupedThreads.map(([label, groupThreads]) => (
-            <SidebarGroup key={label} className="pt-4">
-              <SidebarGroupLabel className="px-2 text-xs font-medium text-muted-foreground/50 uppercase tracking-wider">
-                {label}
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {groupThreads.map((thread: any) => (
-                    <SidebarMenuItem key={thread.id}>
-                      <SidebarMenuButton
-                        isActive={thread.id === activeThreadId}
-                        onClick={() => handleSelectThread(thread.id)}
-                        className="h-9 group/item transition-colors"
-                      >
-                        <span className="truncate w-full text-sm">
-                          {thread.title || "Untitled Chat"}
-                        </span>
-                      </SidebarMenuButton>
+      {!isSidebarCollapsed && (
+        <SidebarContent className="px-2 scrollbar-thin scrollbar-thumb-sidebar-border scrollbar-track-transparent">
+          {threads.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground/60">
+              <MessageSquare className="mb-2 size-8 opacity-20" />
+              <p>No history yet</p>
+            </div>
+          ) : (
+            groupedThreads.map(([label, groupThreads]) => (
+              <SidebarGroup key={label} className="pt-4">
+                <SidebarGroupLabel asChild>
+                  <button
+                    type="button"
+                    aria-expanded={!collapsedGroups[label]}
+                    className="flex w-full cursor-pointer select-none items-center justify-between px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/50"
+                    onClick={() => toggleGroup(label)}
+                  >
+                    <span>{label}</span>
+                    {collapsedGroups[label] ? (
+                      <ChevronRight className="size-3" />
+                    ) : (
+                      <ChevronDown className="size-3" />
+                    )}
+                  </button>
+                </SidebarGroupLabel>
+                {!collapsedGroups[label] && (
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {groupThreads.map((thread: any) => (
+                        <SidebarMenuItem key={thread.id}>
+                          <SidebarMenuButton
+                            isActive={thread.id === activeThreadId}
+                            onClick={() => handleSelectThread(thread.id)}
+                            className="h-9 group/item transition-colors"
+                          >
+                            <span className="truncate w-full text-sm">
+                              {thread.title || "Untitled Chat"}
+                            </span>
+                          </SidebarMenuButton>
 
-                      {/* 下拉菜单逻辑保持不变 */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <SidebarMenuAction
-                            showOnHover
-                            className="right-1 opacity-0 transition-opacity group-hover/item:opacity-100 data-[state=open]:opacity-100"
-                          >
-                            <MoreHorizontal className="size-4" />
-                            <span className="sr-only">More</span>
-                          </SidebarMenuAction>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          className="w-48"
-                          align="start"
-                          side="right"
-                        >
-                          <DropdownMenuItem>
-                            <Settings className="mr-2 size-4 text-muted-foreground" />
-                            <span>Rename</span>
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem
-                            className="text-destructive focus:text-destructive"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteThread(thread.id);
-                            }}
-                          >
-                            <Trash2 className="mr-2 size-4" />
-                            <span>Delete</span>
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))
-        )}
-      </SidebarContent>
+                          {/* 下拉菜单逻辑保持不变 */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <SidebarMenuAction
+                                showOnHover
+                                className="right-1 opacity-0 transition-opacity group-hover/item:opacity-100 data-[state=open]:opacity-100"
+                              >
+                                <MoreHorizontal className="size-4" />
+                                <span className="sr-only">More</span>
+                              </SidebarMenuAction>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              className="w-48"
+                              align="start"
+                              side="right"
+                            >
+                              <DropdownMenuItem>
+                                <Settings className="mr-2 size-4 text-muted-foreground" />
+                                <span>Rename</span>
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  deleteThread(thread.id);
+                                }}
+                              >
+                                <Trash2 className="mr-2 size-4" />
+                                <span>Delete</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                )}
+              </SidebarGroup>
+            ))
+          )}
+        </SidebarContent>
+      )}
 
       {/* --- 区域 3: 底部 --- */}
-      <SidebarFooter className="p-2">
-        <SidebarMenu>
-          {threads.length > 0 && (
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={handleDeleteAll}
-                className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-              >
-                <Trash2 className="size-4" />
-                <span>Clear History</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          )}
-
-          {!isGuestMode && (
-            <>
-              <SidebarSeparator className="my-2 opacity-50" />
-
+      {!isSidebarCollapsed && (
+        <SidebarFooter className="p-2">
+          <SidebarMenu>
+            {threads.length > 0 && (
               <SidebarMenuItem>
-                <SidebarMenuButton className="text-sidebar-foreground/80">
-                  <LayoutDashboard className="size-4" />
-                  <Link href={`/${slug}/overview`}>
-                    <span>Go To Dashboard</span>
-                  </Link>
+                <SidebarMenuButton
+                  onClick={handleDeleteAll}
+                  className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                >
+                  <Trash2 className="size-4" />
+                  <span>Clear History</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            </>
-          )}
-        </SidebarMenu>
-      </SidebarFooter>
+            )}
+
+            {!isGuestMode && (
+              <>
+                <SidebarSeparator className="my-2 opacity-50" />
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton className="text-sidebar-foreground/80">
+                    <LayoutDashboard className="size-4" />
+                    <Link href={`/${slug}/overview`}>
+                      <span>Go To Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </>
+            )}
+          </SidebarMenu>
+        </SidebarFooter>
+      )}
     </AppSidebar>
   );
 }

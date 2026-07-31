@@ -61,7 +61,11 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
   const [isInitializing, setIsInitializing] = useState(true);
   const params = useParams();
   const slug = params.slug as string;
-  const api = getClientApi().forWorkspace(slug, { visitorId });
+  const api = useMemo(
+    () => getClientApi().forWorkspace(slug, { visitorId }),
+    [slug, visitorId],
+  );
+  const currentThreadStorageKey = `${CURRENT_THREAD_ID_KEY}:${slug}:${visitorId || "authenticated"}`;
 
   const fetchThreads = useCallback(async () => {
     try {
@@ -76,6 +80,20 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
       console.error("Failed to fetch threads", error);
       return [];
     }
+  }, [api.threads]);
+
+  const createNewLocalThread = useCallback(() => {
+    const newId = uuidv4();
+    const newThread: ChatThread = {
+      id: newId,
+      title: "New Chat",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    setThreads((prev) => [newThread, ...prev]);
+    setActiveThreadId(newId);
+    return newId;
   }, []);
 
   useEffect(() => {
@@ -90,9 +108,17 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
       setThreads(serverThreads);
 
       // 恢复上次选中的 ID
-      const lastActiveId = localStorage.getItem(CURRENT_THREAD_ID_KEY);
+      const searchParams = new URLSearchParams(window.location.search);
+      const isExternalLaunch =
+        searchParams.has("workflow") || searchParams.has("query");
+      const lastActiveId = localStorage.getItem(currentThreadStorageKey);
 
-      if (lastActiveId && serverThreads.some((t) => t.id === lastActiveId)) {
+      if (isExternalLaunch) {
+        createNewLocalThread();
+      } else if (
+        lastActiveId &&
+        serverThreads.some((t) => t.id === lastActiveId)
+      ) {
         // 如果本地存的 ID 在服务器列表里存在，就用它
         setActiveThreadId(lastActiveId);
       } else if (serverThreads.length > 0) {
@@ -111,28 +137,14 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
     return () => {
       mounted = false;
     };
-  }, [fetchThreads]);
-
-  const createNewLocalThread = useCallback(() => {
-    const newId = uuidv4();
-    const newThread: ChatThread = {
-      id: newId,
-      title: "New Chat",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    setThreads((prev) => [newThread, ...prev]);
-    setActiveThreadId(newId);
-    return newId;
-  }, []);
+  }, [createNewLocalThread, currentThreadStorageKey, fetchThreads]);
 
   // --- 4. 监听 Active ID 变化并存储偏好 ---
   useEffect(() => {
     if (activeThreadId) {
-      localStorage.setItem(CURRENT_THREAD_ID_KEY, activeThreadId);
+      localStorage.setItem(currentThreadStorageKey, activeThreadId);
     }
-  }, [activeThreadId]);
+  }, [activeThreadId, currentThreadStorageKey]);
 
   const createThread = useCallback(() => {
     createNewLocalThread();
@@ -140,8 +152,17 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
 
   const updateThreadTitle = useCallback(async () => {
     const latestThreads = await fetchThreads();
-    setThreads(latestThreads);
-  }, []);
+    setThreads((currentThreads) => {
+      const activeLocalThread = currentThreads.find(
+        (thread) =>
+          thread.id === activeThreadId &&
+          !latestThreads.some((latestThread) => latestThread.id === thread.id),
+      );
+      return activeLocalThread
+        ? [activeLocalThread, ...latestThreads]
+        : latestThreads;
+    });
+  }, [activeThreadId, fetchThreads]);
 
   const deleteThread = useCallback(
     async (id: string) => {

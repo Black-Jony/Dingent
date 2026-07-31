@@ -220,6 +220,7 @@ src/dingent/static
 .playwright-e2e*.db
 .playwright-e2e*.db-shm
 .playwright-e2e*.db-wal
+/test-results/
 ui/test-results/
 src/bio_workspace/
 src/data/

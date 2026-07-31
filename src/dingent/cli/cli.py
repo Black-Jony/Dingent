@@ -412,9 +412,14 @@ def run(
 
     database_url = f"sqlite:///{paths.sqlite_path}"
     is_new_database = _is_new_database(database_url)
-    create_db_and_tables()
-    if not skip_migration:
-        _run_migrations(stamp_only=is_new_database)
+    if is_new_database:
+        create_db_and_tables()
+        if not skip_migration:
+            _run_migrations(stamp_only=True)
+    else:
+        if not skip_migration:
+            _run_migrations()
+        create_db_and_tables()
 
     # 2. 导入依赖
     from dingent.cli.assets import asset_manager

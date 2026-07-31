@@ -1,3 +1,4 @@
+import json
 from typing import Any, cast
 
 import pytest
@@ -133,6 +134,176 @@ async def test_ding_middleware_awrap_tool_call_with_tool_message():
     assert messages[0].tool_call_id == "call_123"
     assert messages[1].id == "call_123:activity"
     assert messages[1].type == "activity"
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_turns_plain_structured_content_into_a_table():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "legacy_tool"
+
+    class MockRequest:
+        tool_call = {"id": "call_legacy", "args": {}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(
+            content="Tool executed",
+            tool_call_id="call_legacy",
+            artifact={"structured_content": {"accession": "P04637", "organism": "Homo sapiens"}},
+        )
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    assert isinstance(result, Command)
+    messages = result.update["messages"]
+    assert len(messages) == 2
+    assert messages[1].type == "activity"
+    activity_content = messages[1].content[0]
+    assert activity_content["a2ui_operations"]
+    rendered_operations = json.dumps(activity_content["a2ui_operations"], ensure_ascii=False)
+    assert "Property" in rendered_operations
+    assert "Value" in rendered_operations
+    assert "P04637" in rendered_operations
+    assert "Homo sapiens" in rendered_operations
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_preserves_legacy_plugin_display_protocol():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "legacy_tool"
+
+    class MockRequest:
+        tool_call = {"id": "call_legacy_display", "args": {}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    legacy_display = {
+        "association_table": {
+            "columns": ["Property", "Value"],
+            "rows": [["accession", "P04637"]],
+        }
+    }
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(
+            content="Tool executed",
+            tool_call_id="call_legacy_display",
+            artifact={
+                "structured_content": {
+                    "model_text": "AlphaFold result",
+                    "display": legacy_display,
+                }
+            },
+        )
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    assert isinstance(result, Command)
+    messages = result.update["messages"]
+    assert messages[0].content == "AlphaFold result"
+    assert messages[1].content == [legacy_display]
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_parses_legacy_display_from_json_content():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "generate_gwas_sankey"
+
+    class MockRequest:
+        tool_call = {"id": "call_gwas", "args": {"trait_name": "plant height"}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    legacy_display = {
+        "sankey_image_base64": "aW1hZ2U=",
+        "association_table": {
+            "columns": ["Variant ID", "Trait"],
+            "rows": [["ghi12837308", "plant height"]],
+        },
+    }
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(
+            content=json.dumps(
+                {
+                    "model_text": "Found 8 GWAS associations.",
+                    "display": legacy_display,
+                }
+            ),
+            tool_call_id="call_gwas",
+        )
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    assert isinstance(result, Command)
+    messages = result.update["messages"]
+    assert len(messages) == 2
+    assert messages[0].content == "Found 8 GWAS associations."
+    assert messages[0].artifact == legacy_display
+    assert messages[1].id == "call_gwas:activity"
+    assert messages[1].content == [legacy_display]
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_parses_legacy_display_from_text_content_block():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "legacy_tool"
+
+    class MockRequest:
+        tool_call = {"id": "call_text_block", "args": {}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    display = {"text": "Rendered result"}
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(
+            content=[
+                {
+                    "type": "text",
+                    "text": json.dumps({"model_text": "Model result", "display": display}),
+                }
+            ],
+            tool_call_id="call_text_block",
+        )
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    messages = result.update["messages"]
+    assert messages[0].content == "Model result"
+    assert messages[1].content == [display]
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_keeps_non_json_tool_content_unchanged():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "plain_text_tool"
+
+    class MockRequest:
+        tool_call = {"id": "call_plain", "args": {}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(content="Plain tool result", tool_call_id="call_plain")
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    messages = result.update["messages"]
+    assert len(messages) == 1
+    assert messages[0].content == "Plain tool result"
+    assert messages[0].artifact is None
 
 
 @pytest.mark.asyncio

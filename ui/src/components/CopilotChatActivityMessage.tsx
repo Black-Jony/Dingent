@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityMessage } from "@ag-ui/core";
 import { twMerge } from "tailwind-merge";
 import { useRenderActivityMessage } from "@copilotkit/react-core/v2";
@@ -40,6 +40,39 @@ export interface CopilotChatActivityListProps extends React.HTMLAttributes<HTMLD
   messages: ActivityMessage[];
 }
 
+function getLegacyDisplayContent(message: ActivityMessage): any {
+  const content = message.content as any;
+  if (Array.isArray(content)) {
+    return content.find(
+      (item) => item && typeof item === "object" && item.species_overview,
+    );
+  }
+  return content;
+}
+
+function getSpeciesNameFromActivity(message: ActivityMessage): string | null {
+  if (message.activityType !== "a2ui-surface") return null;
+  const content = getLegacyDisplayContent(message);
+  if (!content || typeof content !== "object") return null;
+
+  const summarySpecies =
+    typeof content.summary?.species_name === "string"
+      ? content.summary.species_name.trim()
+      : "";
+  if (summarySpecies) return summarySpecies;
+
+  const summaryFilter =
+    typeof content.summary?.species_filter === "string"
+      ? content.summary.species_filter.trim()
+      : "";
+  if (summaryFilter) return summaryFilter;
+
+  const buttons = content.species_overview?.species_buttons;
+  if (!Array.isArray(buttons)) return null;
+  const active = buttons.find((button: any) => button?.active);
+  return String(active?.name || buttons[0]?.name || "").trim() || null;
+}
+
 /**
  * 专门用于渲染 Activity 消息列表的组件
  */
@@ -54,6 +87,7 @@ export function CopilotChatActivityList({
     typeof activityMessageRenderer === "function"
       ? activityMessageRenderer
       : activityMessageRenderer?.renderActivityMessage;
+  const [collapsedMap, setCollapsedMap] = useState<Record<string, boolean>>({});
   const visibleMessages = useMemo(() => {
     if (!messages || messages.length === 0) return [];
 
@@ -84,6 +118,29 @@ export function CopilotChatActivityList({
     });
   }, [messages]);
 
+  const gwasMessageIds = useMemo(
+    () =>
+      visibleMessages
+        .filter((message) => Boolean(getSpeciesNameFromActivity(message)))
+        .map((message) => String(message.id)),
+    [visibleMessages],
+  );
+  const latestGwasMessageId = gwasMessageIds.at(-1) ?? null;
+  const gwasSignature = useMemo(
+    () => gwasMessageIds.join("|"),
+    [gwasMessageIds],
+  );
+
+  useEffect(() => {
+    setCollapsedMap(() => {
+      const next: Record<string, boolean> = {};
+      for (const id of gwasSignature ? gwasSignature.split("|") : []) {
+        next[id] = id !== latestGwasMessageId;
+      }
+      return next;
+    });
+  }, [gwasSignature, latestGwasMessageId]);
+
   if (
     !renderActivityMessage ||
     !visibleMessages ||
@@ -96,13 +153,53 @@ export function CopilotChatActivityList({
 
   return (
     <div className={twMerge("flex flex-col gap-2", className)} {...props}>
-      {visibleMessages.map((visibleMessages) => (
-        <MemoizedActivityMessage
-          key={visibleMessages.id}
-          message={visibleMessages}
-          renderActivityMessage={renderActivityMessage}
-        />
-      ))}
+      {visibleMessages.map((message) => {
+        const messageId = String(message.id);
+        const speciesName = getSpeciesNameFromActivity(message);
+        if (!speciesName) {
+          return (
+            <MemoizedActivityMessage
+              key={message.id}
+              message={message}
+              renderActivityMessage={renderActivityMessage}
+            />
+          );
+        }
+
+        const isCollapsed =
+          collapsedMap[messageId] ?? messageId !== latestGwasMessageId;
+        return (
+          <div
+            key={message.id}
+            className="rounded-md border border-zinc-200 bg-white/50"
+          >
+            <button
+              type="button"
+              aria-expanded={!isCollapsed}
+              className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium"
+              onClick={() =>
+                setCollapsedMap((previous) => ({
+                  ...previous,
+                  [messageId]: !isCollapsed,
+                }))
+              }
+            >
+              <span>{`Species (${speciesName})`}</span>
+              <span className="text-xs text-zinc-500">
+                {isCollapsed ? "Expand" : "Collapse"}
+              </span>
+            </button>
+            {!isCollapsed && (
+              <div className="px-2 pb-2">
+                <MemoizedActivityMessage
+                  message={message}
+                  renderActivityMessage={renderActivityMessage}
+                />
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

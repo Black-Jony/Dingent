@@ -3,7 +3,7 @@ import Cookies from "js-cookie";
 import { useAuthStore } from "@/store";
 import { getOrSetVisitorId } from "../utils";
 
-const BASE_PATH = "/dingent/web";
+const BASE_PATH = "/dingent-resource";
 
 export const getBaseUrl = () => `${BASE_PATH}/api/v1`;
 
@@ -13,7 +13,8 @@ let cachedVisitorId: string | null = null;
 
 export function getClientApi(accessToken?: string | null) {
   const state = useAuthStore.getState();
-  const token = accessToken || state.accessToken || Cookies.get("access_token") || null;
+  const token =
+    accessToken || state.accessToken || Cookies.get("access_token") || null;
   let visitorId = state.visitorId || Cookies.get("visitor_id") || null;
 
   if (!token && !visitorId) {
@@ -37,7 +38,7 @@ export function getClientApi(accessToken?: string | null) {
         if (typeof window !== "undefined") {
           // ✅ 3. 检查当前路径时，也要包含 BASE_PATH
           // window.location.pathname 浏览器返回的是包含 base path 的完整路径
-          // 例如：/dingent/web/auth/login
+          // 例如：/dingent-resource/auth/login
           if (!window.location.pathname.startsWith(`${BASE_PATH}/auth/login`)) {
             const currentPath = encodeURIComponent(
               window.location.pathname + window.location.search,
