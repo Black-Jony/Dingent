@@ -36,6 +36,16 @@ class Settings(BaseSettings):
     CAS_LOGOUT_URL: str | None = None
     CAS_LOGOUT_SERVICE_URL: str | None = None
 
+    # --- Optional local speech-to-text ---
+    TRANSCRIPTION_ENABLED: bool = False
+    TRANSCRIPTION_MODEL: str = "small"
+    TRANSCRIPTION_DEVICE: str = "cpu"
+    TRANSCRIPTION_COMPUTE_TYPE: str = "int8"
+    TRANSCRIPTION_LANGUAGE: str | None = None
+    TRANSCRIPTION_BEAM_SIZE: int = 5
+    TRANSCRIPTION_LOCAL_FILES_ONLY: bool = False
+    TRANSCRIPTION_MAX_FILE_SIZE_MB: int = 25
+
 
 @lru_cache
 def get_settings() -> Settings:

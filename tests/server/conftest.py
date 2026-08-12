@@ -3,9 +3,9 @@ from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 from sqlmodel.pool import StaticPool
 
+import dingent.server.app as app_module
 from dingent.core.db.models import Role  # noqa: F401
 from dingent.server.api.dependencies import get_db_session
-from dingent.server.app import create_app
 
 # Use an in-memory SQLite database for testing
 sqlite_url = "sqlite://"
@@ -39,8 +39,9 @@ def session_fixture():
 
 
 @pytest.fixture(name="app")
-def app_fixture():
-    app = create_app()
+def app_fixture(monkeypatch):
+    monkeypatch.setattr(app_module, "engine", engine)
+    app = app_module.create_app()
     return app
 
 

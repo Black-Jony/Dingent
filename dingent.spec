@@ -42,6 +42,17 @@ dingent_hidden_imports = collect_submodules('dingent')
 hiddenimports += dingent_hidden_imports
 hiddenimports += ['rich._unicode_data.unicode17-0-0']
 
+# Optional local speech-to-text runtime. Missing packages are ignored for
+# base-only development installs; release builds install all extras.
+for package_name in ['faster_whisper', 'ctranslate2', 'av', 'onnxruntime']:
+    try:
+        tmp_ret = collect_all(package_name)
+    except Exception:
+        continue
+    datas += tmp_ret[0]
+    binaries += tmp_ret[1]
+    hiddenimports += tmp_ret[2]
+
 
 hiddenimports += ['alembic']
 datas += [

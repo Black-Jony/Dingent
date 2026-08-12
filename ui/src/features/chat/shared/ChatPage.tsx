@@ -18,10 +18,12 @@ import {
   useAgent,
   CopilotSidebar,
   useCopilotKit,
+  type AttachmentsConfig,
   type CopilotChatMessageViewProps,
   type Message,
 } from "@copilotkit/react-core/v2";
 import { useRenderToolCall } from "@copilotkit/react-core";
+import { toast } from "sonner";
 
 import { Check, CheckCircle2, Loader2 } from "lucide-react";
 import { ThinkingTextMessageContentEvent } from "@ag-ui/client";
@@ -64,6 +66,13 @@ interface ChatTimingStats {
   activityCount: number;
   toolCallCount: number;
 }
+
+const CHAT_IMAGE_ATTACHMENTS = {
+  enabled: true,
+  accept: "image/png,image/jpeg,image/webp",
+  maxSize: 5 * 1024 * 1024,
+  onUploadFailed: ({ message }) => toast.error(message),
+} satisfies AttachmentsConfig;
 
 function elapsedMs(startMs: number, endMs?: number) {
   return typeof endMs === "number"
@@ -509,6 +518,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       <CopilotSidebar
         agentId={workflow?.name}
         threadId={activeThreadId}
+        attachments={CHAT_IMAGE_ATTACHMENTS}
         messageView={messageView}
         header={ChatHeader as any}
       />

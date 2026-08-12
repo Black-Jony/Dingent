@@ -42,6 +42,11 @@ dependencies = [
   "alembic>=1.18.3",
 ]
 
+[project.optional-dependencies]
+speech = [
+  "faster-whisper==1.2.1",
+]
+
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"

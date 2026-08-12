@@ -1,4 +1,5 @@
 import os
+import shutil
 import uuid
 from pathlib import Path
 
@@ -124,4 +125,7 @@ def populate_plugins(mock_app_paths, plugin_cache_dir):
     for plugin_path in plugin_cache_dir.iterdir():
         target_link = target_plugin_dir / plugin_path.name
         if not target_link.exists():
-            target_link.symlink_to(plugin_path.resolve(), target_is_directory=True)
+            try:
+                target_link.symlink_to(plugin_path.resolve(), target_is_directory=True)
+            except OSError:
+                shutil.copytree(plugin_path, target_link)

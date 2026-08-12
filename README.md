@@ -58,6 +58,33 @@ Build the assembled application:
 just build
 ```
 
+## Local Voice Input
+
+Voice transcription is optional and disabled by default. Install the local
+speech extra, then enable it in the Dingent environment or `.env` file:
+
+```bash
+uv sync --extra speech
+```
+
+```env
+TRANSCRIPTION_ENABLED=true
+TRANSCRIPTION_MODEL=small
+TRANSCRIPTION_DEVICE=cpu
+TRANSCRIPTION_COMPUTE_TYPE=int8
+TRANSCRIPTION_LANGUAGE=
+TRANSCRIPTION_BEAM_SIZE=5
+TRANSCRIPTION_LOCAL_FILES_ONLY=false
+TRANSCRIPTION_MAX_FILE_SIZE_MB=25
+```
+
+Recorded audio is written to a temporary local file for transcription and is
+deleted immediately afterward. It is not sent to a third-party service or
+stored in the chat database. A model name is downloaded on first use and
+cached under `DINGENT_HOME/cache/faster-whisper`. For offline deployments, set
+`TRANSCRIPTION_MODEL` to a local model directory and set
+`TRANSCRIPTION_LOCAL_FILES_ONLY=true`.
+
 ## Authentication
 
 Dingent uses a two-layer authentication model:

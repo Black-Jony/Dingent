@@ -13,6 +13,7 @@ from dingent.core.db.models import User
 from dingent.core.workflows.graph_factory import GraphFactory
 from dingent.core.workflows.schemas import ExecutableWorkflow
 from dingent.server.copilot.agents import DingLangGraphAGUIAgent
+from dingent.server.services.transcription_service import is_transcription_available
 
 
 def _truncate(obj: Any, limit: int = 2048) -> Any:
@@ -73,7 +74,7 @@ class CopilotKitSdk:
         if not workspace_id:
             return {
                 "version": "1.0.0",
-                "audioFileTranscriptionEnabled": True,
+                "audioFileTranscriptionEnabled": is_transcription_available(),
                 "agents": [],
             }
 
@@ -111,6 +112,6 @@ class CopilotKitSdk:
         agents.update(default_agent)
         return {
             "version": "1.0.0",
-            "audioFileTranscriptionEnabled": True,
+            "audioFileTranscriptionEnabled": is_transcription_available(),
             "agents": agents,
         }

@@ -6,6 +6,14 @@ const updateThreadTitle = vi.fn();
 const addMessage = vi.fn();
 const runAgent = vi.fn().mockResolvedValue(undefined);
 const replace = vi.fn();
+let sidebarAttachments:
+  | {
+      enabled: boolean;
+      accept?: string;
+      maxSize?: number;
+      onUploadFailed?: (error: { message: string }) => void;
+    }
+  | undefined;
 let activeThreadId = "thread-1";
 let currentSearchParams = new URLSearchParams();
 let agentSubscriber: {
@@ -65,24 +73,29 @@ vi.mock("@copilotkit/react-core/v2", () => ({
   CopilotSidebar: ({
     agentId,
     threadId,
+    attachments,
     messageView: MessageView,
   }: {
     agentId?: string;
     threadId?: string;
+    attachments?: typeof sidebarAttachments;
     messageView?: React.ComponentType<{
       messages: typeof agentMessages;
       isRunning: boolean;
     }>;
-  }) => (
-    <div>
-      <div data-testid="copilot-sidebar">
-        {agentId}:{threadId}
+  }) => {
+    sidebarAttachments = attachments;
+    return (
+      <div>
+        <div data-testid="copilot-sidebar">
+          {agentId}:{threadId}
+        </div>
+        {MessageView && (
+          <MessageView messages={agentMessages} isRunning={false} />
+        )}
       </div>
-      {MessageView && (
-        <MessageView messages={agentMessages} isRunning={false} />
-      )}
-    </div>
-  ),
+    );
+  },
 }));
 
 vi.mock("@copilotkit/react-core", () => ({
@@ -139,6 +152,18 @@ describe("ChatPage", () => {
     runAgent.mockClear();
     replace.mockClear();
     subscribe.mockClear();
+    sidebarAttachments = undefined;
+  });
+
+  it("enables image attachments for file selection, drop, and clipboard paste", () => {
+    render(<ChatPage />);
+
+    expect(sidebarAttachments).toMatchObject({
+      enabled: true,
+      accept: "image/png,image/jpeg,image/webp",
+      maxSize: 5 * 1024 * 1024,
+    });
+    expect(sidebarAttachments?.onUploadFailed).toEqual(expect.any(Function));
   });
 
   it("passes parsed frontend activity messages from CopilotKit agent state to the middle activity list", () => {

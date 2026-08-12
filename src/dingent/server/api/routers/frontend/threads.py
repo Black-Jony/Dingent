@@ -6,11 +6,12 @@ from typing import Annotated, Any, cast
 
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
-from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from loguru import logger
 from sqlmodel import col, delete, select
 
+from dingent.core.config import settings
 from dingent.core.db.crud.workflow import get_workflow_by_name
 from dingent.core.db.models import Conversation, Workflow
 
@@ -26,6 +27,12 @@ from dingent.server.api.dependencies import (
 )
 from dingent.server.copilot.agents import DingLangGraphAGUIAgent
 from dingent.server.services.copilotkit_service import CopilotKitSdk
+from dingent.server.services.transcription_service import (
+    TranscriptionFailedError,
+    TranscriptionUnavailableError,
+    is_transcription_available,
+    transcribe_audio,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -189,6 +196,51 @@ async def get_agents(
     session: DbSession,
 ):
     return sdk.list_agents_for_user(user, session, workspace.id)
+
+
+@router.post("/transcribe")
+async def transcribe_recording(
+    _workspace: CurrentWorkspaceAllowGuest,
+    audio: Annotated[UploadFile, File()],
+):
+    try:
+        if not is_transcription_available():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Local speech transcription is not enabled.",
+            )
+
+        content_type = audio.content_type or ""
+        if not content_type.lower().startswith("audio/"):
+            raise HTTPException(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                detail="Only audio recordings can be transcribed.",
+            )
+
+        max_bytes = max(1, settings.TRANSCRIPTION_MAX_FILE_SIZE_MB) * 1024 * 1024
+        data = await audio.read(max_bytes + 1)
+        if not data:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The audio recording is empty.")
+        if len(data) > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"Audio recordings must be {settings.TRANSCRIPTION_MAX_FILE_SIZE_MB} MB or smaller.",
+            )
+
+        try:
+            text = await transcribe_audio(
+                data,
+                filename=audio.filename,
+                content_type=content_type,
+            )
+        except TranscriptionUnavailableError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+        except TranscriptionFailedError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+
+        return {"text": text}
+    finally:
+        await audio.close()
 
 
 @router.post("/agent/{agent_id}/run")

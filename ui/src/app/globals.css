@@ -123,3 +123,14 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Radix scroll locking mistakes the sidebar's body margin for scrollbar width. */
+@media (min-width: 768px) {
+  body[data-scroll-locked]:has([data-copilot-sidebar]) {
+    padding-right: 0 !important;
+  }
+}
+  body:has([data-copilot-sidebar])
+  [data-copilotkit][data-slot="tooltip-content"] {
+  z-index: 1300 !important;
+}

@@ -82,6 +82,77 @@ def test_list_threads_guest_filters_by_visitor_and_workspace(client: TestClient,
     assert data[0]["title"] == "A1"
 
 
+def test_chat_info_reports_local_transcription_capability(client: TestClient, session, monkeypatch):
+    ws = _create_workspace(session=session, slug="ws-transcription-info", allow_guest_access=True)
+
+    from dingent.server.services import copilotkit_service
+
+    monkeypatch.setattr(copilotkit_service, "is_transcription_available", lambda: True)
+
+    response = client.get(f"/api/v1/{ws.slug}/chat/info")
+
+    assert response.status_code == 200
+    assert response.json()["audioFileTranscriptionEnabled"] is True
+
+
+def test_transcribe_returns_service_unavailable_when_local_asr_is_disabled(client: TestClient, session, monkeypatch):
+    ws = _create_workspace(session=session, slug="ws-transcription-disabled", allow_guest_access=True)
+
+    from dingent.server.api.routers.frontend import threads as chat_threads
+
+    monkeypatch.setattr(chat_threads, "is_transcription_available", lambda: False)
+
+    response = client.post(
+        f"/api/v1/{ws.slug}/chat/transcribe",
+        files={"audio": ("recording.webm", b"audio", "audio/webm")},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Local speech transcription is not enabled."
+
+
+def test_transcribe_rejects_non_audio_upload(client: TestClient, session, monkeypatch):
+    ws = _create_workspace(session=session, slug="ws-transcription-type", allow_guest_access=True)
+
+    from dingent.server.api.routers.frontend import threads as chat_threads
+
+    monkeypatch.setattr(chat_threads, "is_transcription_available", lambda: True)
+
+    response = client.post(
+        f"/api/v1/{ws.slug}/chat/transcribe",
+        files={"audio": ("notes.txt", b"not audio", "text/plain")},
+    )
+
+    assert response.status_code == 415
+
+
+def test_transcribe_returns_local_transcript(client: TestClient, session, monkeypatch):
+    ws = _create_workspace(session=session, slug="ws-transcription-success", allow_guest_access=True)
+    captured: dict[str, object] = {}
+
+    from dingent.server.api.routers.frontend import threads as chat_threads
+
+    async def fake_transcribe(data: bytes, *, filename: str | None, content_type: str | None) -> str:
+        captured.update(data=data, filename=filename, content_type=content_type)
+        return "local transcript"
+
+    monkeypatch.setattr(chat_threads, "is_transcription_available", lambda: True)
+    monkeypatch.setattr(chat_threads, "transcribe_audio", fake_transcribe)
+
+    response = client.post(
+        f"/api/v1/{ws.slug}/chat/transcribe",
+        files={"audio": ("recording.webm", b"audio bytes", "audio/webm")},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"text": "local transcript"}
+    assert captured == {
+        "data": b"audio bytes",
+        "filename": "recording.webm",
+        "content_type": "audio/webm",
+    }
+
+
 def test_delete_all_threads_guest_deletes_only_current_visitor(client: TestClient, session):
     ws = _create_workspace(session=session, slug="ws-delete", allow_guest_access=True)
     visitor_a = str(uuid.uuid4())

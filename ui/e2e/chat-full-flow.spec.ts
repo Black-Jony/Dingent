@@ -20,6 +20,22 @@ test("guest chat completes a real browser/backend flow and can switch conversati
   await page.waitForURL(/\/guest\/playwright-e2e\/chat$/);
 
   const input = page.getByRole("textbox").last();
+  const mainContent = page.locator("#main-content");
+  await expect(mainContent).toBeVisible();
+  await page.waitForTimeout(400);
+  const widthBeforeUploadMenu = (await mainContent.boundingBox())?.width;
+
+  await page.getByTestId("copilot-add-menu-button").click();
+  await expect(page.locator("body[data-scroll-locked]")).toBeVisible();
+  const widthWithUploadMenu = (await mainContent.boundingBox())?.width;
+
+  expect(widthBeforeUploadMenu).toBeDefined();
+  expect(widthWithUploadMenu).toBeDefined();
+  expect(Math.abs(widthWithUploadMenu! - widthBeforeUploadMenu!)).toBeLessThan(
+    50,
+  );
+  await page.keyboard.press("Escape");
+
   await input.fill("Get data and analyze it from the browser");
   const sendButton = page.getByTestId("copilot-send-button");
   await expect(sendButton).toBeEnabled();
