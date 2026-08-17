@@ -130,7 +130,11 @@
     padding-right: 0 !important;
   }
 }
-  body:has([data-copilot-sidebar])
-  [data-copilotkit][data-slot="tooltip-content"] {
+body:has([data-copilot-sidebar])
+  [data-copilotkit][data-slot="tooltip-content"],
+body:has([data-copilot-sidebar])
+  [data-copilotkit][data-slot="dropdown-menu-content"],
+body:has([data-copilot-sidebar])
+  [data-copilotkit][data-slot="dropdown-menu-sub-content"] {
   z-index: 1300 !important;
 }
