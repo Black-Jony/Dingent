@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Edit2, Trash2, CheckCircle, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,14 +23,21 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import type { LLMModelConfig, LLMModelConfigUpdate, TestConnectionRequest, TestConnectionResponse } from "@/types/entity";
+import type {
+  LLMModelConfig,
+  LLMModelConfigUpdate,
+  TestConnectionRequest,
+  TestConnectionResponse,
+} from "@/types/entity";
 import { ModelConfigDialog } from "./model-config-dialog";
 
 interface ModelsTableProps {
   models: LLMModelConfig[];
   onEdit: (id: string, data: LLMModelConfigUpdate) => void;
   onDelete: (id: string) => void;
-  onTestConnection?: (data: TestConnectionRequest) => Promise<TestConnectionResponse>;
+  onTestConnection?: (
+    data: TestConnectionRequest,
+  ) => Promise<TestConnectionResponse>;
   isUpdating: boolean;
   isDeleting: boolean;
   deletingId?: string;
@@ -44,6 +52,8 @@ export function ModelsTable({
   isDeleting,
   deletingId,
 }: ModelsTableProps) {
+  const t = useTranslations("Models");
+  const common = useTranslations("Common");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [modelToDelete, setModelToDelete] = useState<string | null>(null);
 
@@ -63,10 +73,8 @@ export function ModelsTable({
   if (models.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-muted-foreground">No model configurations yet.</p>
-        <p className="text-sm text-muted-foreground">
-          Add a model configuration to get started.
-        </p>
+        <p className="text-muted-foreground">{t("empty")}</p>
+        <p className="text-sm text-muted-foreground">{t("emptyHelp")}</p>
       </div>
     );
   }
@@ -76,13 +84,13 @@ export function ModelsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Provider</TableHead>
-            <TableHead>Model</TableHead>
-            <TableHead>API Base</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>API Key</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>{common("name")}</TableHead>
+            <TableHead>{t("provider")}</TableHead>
+            <TableHead>{t("model")}</TableHead>
+            <TableHead>{t("apiBase")}</TableHead>
+            <TableHead>{t("status")}</TableHead>
+            <TableHead>{t("apiKey")}</TableHead>
+            <TableHead className="text-right">{common("actions")}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -100,20 +108,20 @@ export function ModelsTable({
                 {model.is_active ? (
                   <Badge variant="default" className="gap-1">
                     <CheckCircle className="h-3 w-3" />
-                    Active
+                    {common("active")}
                   </Badge>
                 ) : (
                   <Badge variant="secondary" className="gap-1">
                     <XCircle className="h-3 w-3" />
-                    Inactive
+                    {common("inactive")}
                   </Badge>
                 )}
               </TableCell>
               <TableCell>
                 {model.has_api_key ? (
-                  <Badge variant="outline">Configured</Badge>
+                  <Badge variant="outline">{t("configured")}</Badge>
                 ) : (
-                  <Badge variant="secondary">Not Set</Badge>
+                  <Badge variant="secondary">{t("notSet")}</Badge>
                 )}
               </TableCell>
               <TableCell className="text-right">
@@ -147,16 +155,15 @@ export function ModelsTable({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Model Configuration</AlertDialogTitle>
+            <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete this model configuration? This
-              action cannot be undone.
+              {t("deleteDescription")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{common("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete}>
-              Delete
+              {common("delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

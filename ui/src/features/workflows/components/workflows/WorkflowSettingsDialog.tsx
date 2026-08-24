@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import { Settings } from "lucide-react";
 import {
   Dialog,
@@ -19,7 +20,11 @@ import type { Workflow, LLMModelConfig } from "@/types/entity";
 interface WorkflowSettingsDialogProps {
   workflow: Workflow;
   models: LLMModelConfig[];
-  onSave: (updates: { name?: string; description?: string; model_config_id?: string | null }) => void;
+  onSave: (updates: {
+    name?: string;
+    description?: string;
+    model_config_id?: string | null;
+  }) => void;
   isSaving: boolean;
 }
 
@@ -29,11 +34,13 @@ export function WorkflowSettingsDialog({
   onSave,
   isSaving,
 }: WorkflowSettingsDialogProps) {
+  const t = useTranslations("Workflows");
+  const common = useTranslations("Common");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(workflow.name);
   const [description, setDescription] = useState(workflow.description || "");
   const [modelConfigId, setModelConfigId] = useState<string | null>(
-    workflow.model_config_id || null
+    workflow.model_config_id || null,
   );
 
   useEffect(() => {
@@ -62,48 +69,50 @@ export function WorkflowSettingsDialog({
       </DialogTrigger>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Workflow Settings</DialogTitle>
+          <DialogTitle>{t("settings")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="workflow-name">Name</Label>
+            <Label htmlFor="workflow-name">{t("workflowName")}</Label>
             <Input
               id="workflow-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter workflow name"
+              placeholder={t("workflowNamePlaceholder")}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="workflow-description">Description</Label>
+            <Label htmlFor="workflow-description">
+              {common("description")}
+            </Label>
             <Textarea
               id="workflow-description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter workflow description (optional)"
+              placeholder={t("descriptionPlaceholder")}
               rows={3}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="workflow-model">Model Configuration (Optional)</Label>
+            <Label htmlFor="workflow-model">{t("modelConfiguration")}</Label>
             <p className="text-sm text-muted-foreground mb-2">
-              Override the workspace default model for this workflow. Leave empty to use workspace default.
+              {t("modelHelp")}
             </p>
             <ModelSelector
               models={models}
               value={modelConfigId}
               onChange={setModelConfigId}
-              placeholder="Use workspace default"
+              placeholder={t("useWorkspaceDefault")}
               allowClear={true}
             />
           </div>
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => setOpen(false)}>
-            Cancel
+            {common("cancel")}
           </Button>
           <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save Changes"}
+            {isSaving ? common("saving") : common("saveChanges")}
           </Button>
         </div>
       </DialogContent>

@@ -39,15 +39,23 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { useWorkspaceApi } from "@/hooks/use-workspace-api";
 import { Workspace } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
-// --- 辅助函数：按时间分组 (保持不变) ---
+type ThreadGroupKey = "today" | "yesterday" | "previousSevenDays" | "older";
+
+const THREAD_GROUP_ORDER: ThreadGroupKey[] = [
+  "today",
+  "yesterday",
+  "previousSevenDays",
+  "older",
+];
+
 const groupThreadsByDate = (threads: any[]) => {
-  // ... (保持你原本的排序和分组逻辑) ...
-  const groups: Record<string, typeof threads> = {
-    Today: [],
-    Yesterday: [],
-    "Previous 7 Days": [],
-    Older: [],
+  const groups: Record<ThreadGroupKey, typeof threads> = {
+    today: [],
+    yesterday: [],
+    previousSevenDays: [],
+    older: [],
   };
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -64,13 +72,15 @@ const groupThreadsByDate = (threads: any[]) => {
 
   sortedThreads.forEach((thread) => {
     const date = new Date(thread.updatedAt || thread.createdAt || new Date());
-    if (date >= today) groups["Today"].push(thread);
-    else if (date >= yesterday) groups["Yesterday"].push(thread);
-    else if (date >= lastWeek) groups["Previous 7 Days"].push(thread);
-    else groups["Older"].push(thread);
+    if (date >= today) groups.today.push(thread);
+    else if (date >= yesterday) groups.yesterday.push(thread);
+    else if (date >= lastWeek) groups.previousSevenDays.push(thread);
+    else groups.older.push(thread);
   });
 
-  return Object.entries(groups).filter(([_, items]) => items.length > 0);
+  return THREAD_GROUP_ORDER.map((key) => [key, groups[key]] as const).filter(
+    ([, items]) => items.length > 0,
+  );
 };
 
 interface ChatHistorySidebarProps {
@@ -78,6 +88,7 @@ interface ChatHistorySidebarProps {
 }
 
 export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
+  const t = useTranslations("Chat");
   const {
     threads,
     activeThreadId,
@@ -90,12 +101,18 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
   const pathname = usePathname();
 
   const groupedThreads = useMemo(() => groupThreadsByDate(threads), [threads]);
+  const groupLabels: Record<ThreadGroupKey, string> = {
+    today: t("sidebar.groups.today"),
+    yesterday: t("sidebar.groups.yesterday"),
+    previousSevenDays: t("sidebar.groups.previousSevenDays"),
+    older: t("sidebar.groups.older"),
+  };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [collapsedGroups, setCollapsedGroups] = useState<
-    Record<string, boolean>
+    Partial<Record<ThreadGroupKey, boolean>>
   >({});
 
-  const toggleGroup = (label: string) => {
+  const toggleGroup = (label: ThreadGroupKey) => {
     setCollapsedGroups((previous) => ({
       ...previous,
       [label]: !previous[label],
@@ -114,7 +131,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
 
   const { slug } = useWorkspaceApi();
   const handleDeleteAll = () => {
-    if (window.confirm("Are you sure you want to delete all history?")) {
+    if (window.confirm(t("sidebar.clearConfirm"))) {
       deleteAllThreads();
     }
   };
@@ -135,9 +152,11 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
             <SidebarMenuButton
               size="lg"
               aria-label={
-                isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+                isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
               }
-              title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={
+                isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
+              }
               onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
               className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
             >
@@ -147,7 +166,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                 <ChevronLeft className="size-4" />
               )}
               {!isSidebarCollapsed && (
-                <span className="font-medium">Collapse</span>
+                <span className="font-medium">{t("sidebar.collapse")}</span>
               )}
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -159,7 +178,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                 className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-[0.98] transition-all"
               >
                 <Plus className="mr-2 size-4 text-muted-foreground" />
-                <span className="font-medium">New Chat</span>
+                <span className="font-medium">{t("sidebar.newChat")}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
@@ -172,7 +191,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
           {threads.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground/60">
               <MessageSquare className="mb-2 size-8 opacity-20" />
-              <p>No history yet</p>
+              <p>{t("sidebar.noHistory")}</p>
             </div>
           ) : (
             groupedThreads.map(([label, groupThreads]) => (
@@ -184,7 +203,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                     className="flex w-full cursor-pointer select-none items-center justify-between px-2 text-xs font-medium uppercase tracking-wider text-muted-foreground/50"
                     onClick={() => toggleGroup(label)}
                   >
-                    <span>{label}</span>
+                    <span>{groupLabels[label]}</span>
                     {collapsedGroups[label] ? (
                       <ChevronRight className="size-3" />
                     ) : (
@@ -203,7 +222,9 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                             className="h-9 group/item transition-colors"
                           >
                             <span className="truncate w-full text-sm">
-                              {thread.title || "Untitled Chat"}
+                              {thread.title === "New Chat"
+                                ? t("sidebar.newChat")
+                                : thread.title || t("sidebar.untitled")}
                             </span>
                           </SidebarMenuButton>
 
@@ -215,7 +236,9 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                                 className="right-1 opacity-0 transition-opacity group-hover/item:opacity-100 data-[state=open]:opacity-100"
                               >
                                 <MoreHorizontal className="size-4" />
-                                <span className="sr-only">More</span>
+                                <span className="sr-only">
+                                  {t("sidebar.more")}
+                                </span>
                               </SidebarMenuAction>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent
@@ -225,7 +248,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                             >
                               <DropdownMenuItem>
                                 <Settings className="mr-2 size-4 text-muted-foreground" />
-                                <span>Rename</span>
+                                <span>{t("sidebar.rename")}</span>
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -236,7 +259,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                                 }}
                               >
                                 <Trash2 className="mr-2 size-4" />
-                                <span>Delete</span>
+                                <span>{t("sidebar.delete")}</span>
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -262,7 +285,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                   className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
                 >
                   <Trash2 className="size-4" />
-                  <span>Clear History</span>
+                  <span>{t("sidebar.clearHistory")}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
@@ -275,7 +298,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
                   <SidebarMenuButton className="text-sidebar-foreground/80">
                     <LayoutDashboard className="size-4" />
                     <Link href={`/${slug}/overview`}>
-                      <span>Go To Dashboard</span>
+                      <span>{t("sidebar.goToDashboard")}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -1,11 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getClientApi } from "@/lib/api/client";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/utils";
 
 export function useAssistants(workspaceSlug: string) {
+  const t = useTranslations("Assistants");
   const qc = useQueryClient();
   const api = getClientApi();
   const wsApi = api.forWorkspace(workspaceSlug);
@@ -34,52 +36,53 @@ export function useAssistants(workspaceSlug: string) {
     mutationFn: (data: { name: string; description: string }) =>
       wsApi.assistants.create(data),
     onSuccess: () => {
-      toast.success("Assistant added successfully!");
+      toast.success(t("toastAdded"));
       qc.invalidateQueries({ queryKey: ["assistants"] });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Add assistant failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("toastAddFailed"))),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => wsApi.assistants.delete(id),
     onSuccess: () => {
-      toast.success("Assistant deleted");
+      toast.success(t("toastDeleted"));
       qc.invalidateQueries({ queryKey: ["assistants"] });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Delete assistant failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("toastDeleteFailed"))),
   });
 
   const updateBatchMutation = useMutation({
     mutationFn: async (assistants: any[]) => {
       await Promise.all(
-        assistants.map((a) => wsApi.assistants.update(a.id, a))
+        assistants.map((a) => wsApi.assistants.update(a.id, a)),
       );
     },
     onSuccess: () => {
-      toast.success("All changes saved!");
+      toast.success(t("toastSaved"));
       qc.invalidateQueries({ queryKey: ["assistants"] });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Failed to save changes")),
+    onError: (e) => toast.error(getErrorMessage(e, t("toastSaveFailed"))),
   });
 
   const addPluginMutation = useMutation({
     mutationFn: (p: { assistantId: string; pluginId: string }) =>
       wsApi.assistants.addPlugin(p.assistantId, p.pluginId),
     onSuccess: () => {
-      toast.success("Plugin added");
+      toast.success(t("toastPluginAdded"));
       qc.invalidateQueries({ queryKey: ["assistants"] });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Add plugin failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("toastPluginAddFailed"))),
   });
 
   const removePluginMutation = useMutation({
     mutationFn: (p: { assistantId: string; pluginId: string }) =>
       wsApi.assistants.removePlugin(p.assistantId, p.pluginId),
     onSuccess: () => {
-      toast.success("Plugin removed");
+      toast.success(t("toastPluginRemoved"));
       qc.invalidateQueries({ queryKey: ["assistants"] });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Remove plugin failed")),
+    onError: (e) =>
+      toast.error(getErrorMessage(e, t("toastPluginRemoveFailed"))),
   });
 
   return {

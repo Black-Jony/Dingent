@@ -1,18 +1,27 @@
-'use client'
-import React, {
-  SetStateAction,
-  Dispatch,
-} from "react";
+"use client";
+import React, { SetStateAction, Dispatch } from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { VariantProps, cva } from "class-variance-authority";
 import { PanelLeftIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebarState } from "@/hooks/use-sidebar-state";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "./tooltip";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "./sheet";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./tooltip";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "./sheet";
 import { Button } from "./button";
 import { Input } from "./input";
 import { Separator } from "./separator";
+import { useTranslations } from "next-intl";
 import { Skeleton } from "./skeleton";
 
 const SIDEBAR_WIDTH_MOBILE = "18rem";
@@ -92,6 +101,7 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
 }) {
+  const t = useTranslations("Common");
   const { isMounted, isMobile, state, openMobile, setOpenMobile } =
     useSidebar();
 
@@ -137,8 +147,8 @@ function Sidebar({
           side={side}
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{t("sidebar")}</SheetTitle>
+            <SheetDescription>{t("mobileSidebarDescription")}</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetContent>
@@ -201,6 +211,7 @@ function SidebarTrigger({
   onClick,
   ...props
 }: React.ComponentPropsWithoutRef<typeof Button>) {
+  const t = useTranslations("Common");
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -217,7 +228,7 @@ function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{t("toggleSidebar")}</span>
     </Button>
   );
 }
@@ -226,16 +237,17 @@ function SidebarRail({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"button">) {
+  const t = useTranslations("Common");
   const { toggleSidebar } = useSidebar();
 
   return (
     <button
       data-sidebar="rail"
       data-slot="sidebar-rail"
-      aria-label="Toggle Sidebar"
+      aria-label={t("toggleSidebar")}
       tabIndex={-1}
       onClick={toggleSidebar}
-      title="Toggle Sidebar"
+      title={t("toggleSidebar")}
       className={cn(
         "hover:after:bg-sidebar-border absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear group-data-[side=left]:-end-4 group-data-[side=right]:start-0 after:absolute after:inset-y-0 after:start-1/2 after:w-[2px] sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
@@ -541,7 +553,7 @@ function SidebarMenuAction({
         "peer-data-[size=lg]/menu-button:top-2.5",
         "group-data-[collapsible=icon]:hidden",
         showOnHover &&
-        "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
+          "peer-data-[active=true]/menu-button:text-sidebar-accent-foreground group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 data-[state=open]:opacity-100 md:opacity-0",
         className,
       )}
       {...props}

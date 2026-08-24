@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { StatCard } from "../overview/components/stat-card";
 import {
   Card,
@@ -40,6 +41,7 @@ function useAnalytics({ wsApi }: { wsApi: { overview: OverviewApi } }) {
 }
 
 export function AnalyticsTab({ wsApi }: { wsApi: { overview: OverviewApi } }) {
+  const t = useTranslations("Analytics");
   const { data, loading } = useAnalytics({ wsApi });
 
   const budgetUsage = useMemo(() => {
@@ -57,27 +59,29 @@ export function AnalyticsTab({ wsApi }: { wsApi: { overview: OverviewApi } }) {
       {/* 3. UPDATED: Summary cards now reflect available data */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Current Cost"
+          title={t("currentCost")}
           value={data ? `$${data.current_cost.toFixed(5)}` : "--"}
-          sub={`Total Budget: $${data?.total_budget.toFixed(2) || "N/A"}`}
+          sub={t("totalBudget", {
+            value: data ? `${data.total_budget.toFixed(2)}` : "--",
+          })}
           loading={loading}
         />
         <StatCard
-          title="Budget Usage"
+          title={t("budgetUsage")}
           value={data ? `${budgetUsage.toFixed(2)}%` : "--"}
-          sub="Percentage of total budget used"
+          sub={t("budgetUsageDescription")}
           loading={loading}
         />
         <StatCard
-          title="Total Invocations"
+          title={t("totalInvocations")}
           value="--"
-          sub="Data not available"
+          sub={t("dataUnavailable")}
           loading={loading}
         />
         <StatCard
-          title="Success Rate"
+          title={t("successRate")}
           value="--"
-          sub="Data not available"
+          sub={t("dataUnavailable")}
           loading={loading}
         />
       </div>
@@ -86,16 +90,12 @@ export function AnalyticsTab({ wsApi }: { wsApi: { overview: OverviewApi } }) {
         <div className="col-span-1 lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Usage Over Time</CardTitle>
+              <CardTitle>{t("usageOverTime")}</CardTitle>
               {/* 4. UPDATED: Message for unimplemented feature */}
-              <CardDescription>
-                Time-series data collection is not yet implemented.
-              </CardDescription>
+              <CardDescription>{t("timeSeriesPending")}</CardDescription>
             </CardHeader>
             <CardContent className="flex h-[300px] items-center justify-center">
-              <div className="text-muted-foreground">
-                Chart will be displayed here once data is available.
-              </div>
+              <div className="text-muted-foreground">{t("chartPending")}</div>
             </CardContent>
           </Card>
         </div>
@@ -103,8 +103,8 @@ export function AnalyticsTab({ wsApi }: { wsApi: { overview: OverviewApi } }) {
           {/* 5. UPDATED: Replaced "Top Assistants" with "Cost by Model" */}
           <Card>
             <CardHeader>
-              <CardTitle>Cost by Model</CardTitle>
-              <CardDescription>Breakdown of costs per model.</CardDescription>
+              <CardTitle>{t("costByModel")}</CardTitle>
+              <CardDescription>{t("costByModelDescription")}</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (

@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { OverviewLogEntry } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
 export function RecentLogs({
   logs,
@@ -11,6 +12,7 @@ export function RecentLogs({
   loading?: boolean;
   limit?: number;
 }) {
+  const t = useTranslations("Overview");
   if (loading) {
     return (
       <div className="space-y-2">
@@ -21,7 +23,9 @@ export function RecentLogs({
     );
   }
   if (!logs?.length) {
-    return <div className="text-muted-foreground text-sm">No recent logs.</div>;
+    return (
+      <div className="text-muted-foreground text-sm">{t("noRecentLogs")}</div>
+    );
   }
   return (
     <ul className="space-y-1 text-sm">

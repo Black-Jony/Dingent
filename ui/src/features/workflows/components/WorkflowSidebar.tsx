@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { WorkflowList } from "../components/WorkflowList";
 import { GripVertical } from "lucide-react";
 import { TabsList, TabsTrigger, TabsContent, Tabs } from "@/components/ui/tabs";
@@ -30,6 +31,7 @@ export function WorkflowSidebar({
   onUpdateWorkflow,
   isUpdatingWorkflow,
 }: SidebarProps) {
+  const t = useTranslations("Workflows");
   const { setDraggedAssistant, usedAssistantIds } = useWorkflowContext();
   const [activeTab, setActiveTab] = useState("workflows");
 
@@ -60,9 +62,9 @@ export function WorkflowSidebar({
       >
         <div className="px-4 pt-4">
           <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="workflows">Workflows</TabsTrigger>
+            <TabsTrigger value="workflows">{t("workflows")}</TabsTrigger>
             <TabsTrigger value="components" disabled={!selectedWorkflowId}>
-              Components
+              {t("components")}
             </TabsTrigger>
           </TabsList>
         </div>
@@ -90,7 +92,7 @@ export function WorkflowSidebar({
           className="flex-1 overflow-auto p-4 space-y-3"
         >
           <div className="text-sm text-muted-foreground mb-4">
-            Drag assistants to the canvas to build your flow.
+            {t("dragHelp")}
           </div>
           {availableAssistants.length > 0 ? (
             availableAssistants.map((assistant) => (
@@ -104,7 +106,7 @@ export function WorkflowSidebar({
                 <div>
                   <div className="font-medium text-sm">{assistant.name}</div>
                   <div className="text-xs text-muted-foreground line-clamp-1">
-                    {assistant.description || "No description"}
+                    {assistant.description || t("noDescription")}
                   </div>
                 </div>
               </div>
@@ -112,7 +114,7 @@ export function WorkflowSidebar({
           ) : (
             // 处理空状态：所有助手都用完了
             <div className="text-center text-sm text-muted-foreground py-8 border border-dashed rounded-md">
-              All available assistants are currently in use.
+              {t("allInUse")}
             </div>
           )}
         </TabsContent>

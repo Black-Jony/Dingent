@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"; // 确保路径对应你的 shadcn 组件位置
 import { Button } from "@/components/ui/button";
+import { useTranslations } from "next-intl";
 
 const PAGE_SIZE_OPTIONS = [20, 40, 60, 100] as const;
 
@@ -32,6 +33,8 @@ export function DataTable<TData, TValue>({
   columns,
   data,
 }: DataTableProps<TData, TValue>) {
+  const t = useTranslations("Renderer");
+  const common = useTranslations("Common");
   // 状态：排序
   const [sorting, setSorting] = React.useState<SortingState>([]);
 
@@ -98,7 +101,7 @@ export function DataTable<TData, TValue>({
                   colSpan={columns.length}
                   className="h-24 text-center"
                 >
-                  No results.
+                  {common("noResults")}
                 </TableCell>
               </TableRow>
             )}
@@ -109,14 +112,14 @@ export function DataTable<TData, TValue>({
       {/* 翻页控制区 */}
       <div className="flex items-center justify-end space-x-2 py-4">
         <select
-          aria-label="Rows per page"
+          aria-label={t("rowsPerPage")}
           className="h-9 rounded-md border bg-background px-2 text-sm"
           value={table.getState().pagination.pageSize}
           onChange={(event) => table.setPageSize(Number(event.target.value))}
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
-              {size} / page
+              {t("perPage", { size })}
             </option>
           ))}
         </select>
@@ -126,7 +129,7 @@ export function DataTable<TData, TValue>({
           onClick={() => table.previousPage()}
           disabled={!table.getCanPreviousPage()}
         >
-          Previous
+          {t("previous")}
         </Button>
         <Button
           variant="outline"
@@ -134,7 +137,7 @@ export function DataTable<TData, TValue>({
           onClick={() => table.nextPage()}
           disabled={!table.getCanNextPage()}
         >
-          Next
+          {t("next")}
         </Button>
       </div>
     </div>

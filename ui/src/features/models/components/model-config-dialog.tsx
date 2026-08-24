@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 import {
   Loader2,
   PlusCircle,
@@ -59,6 +60,8 @@ export function ModelConfigDialog({
   onTestConnection,
   trigger,
 }: ModelConfigDialogProps) {
+  const t = useTranslations("Models");
+  const common = useTranslations("Common");
   const [open, setOpen] = useState(false);
 
   // 1. 新增：专门用于存储 Parameters 文本域的字符串状态
@@ -122,7 +125,7 @@ export function ModelConfigDialog({
       setJsonError(null);
       return parsed;
     } catch (e) {
-      setJsonError("Invalid JSON format");
+      setJsonError(t("invalidJson"));
       return null;
     }
   };
@@ -144,7 +147,7 @@ export function ModelConfigDialog({
     const parsedParams = parseParams();
     if (parsedParams === null) return;
 
-    setTestResult({ status: "testing", message: "Testing connection..." });
+    setTestResult({ status: "testing", message: t("testing") });
     try {
       const result = await onTestConnection({
         ...data,
@@ -157,7 +160,7 @@ export function ModelConfigDialog({
       });
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Connection test failed";
+        error instanceof Error ? error.message : t("testFailed");
       setTestResult({
         status: "error",
         message: errorMessage,
@@ -172,28 +175,26 @@ export function ModelConfigDialog({
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline">
-            <PlusCircle className="mr-2 h-4 w-4" /> Add Model
+            <PlusCircle className="mr-2 h-4 w-4" /> {t("addModel")}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            {model ? "Edit Model Configuration" : "Add New Model Configuration"}
-          </DialogTitle>
+          <DialogTitle>{model ? t("editTitle") : t("addTitle")}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label>Configuration Name *</Label>
+              <Label>{t("configName")}</Label>
               <Input
                 value={data.name}
                 onChange={(e) => setData({ ...data, name: e.target.value })}
-                placeholder="e.g., My GPT-4"
+                placeholder={t("configNamePlaceholder")}
               />
             </div>
             <div className="space-y-2">
-              <Label>Provider *</Label>
+              <Label>{t("providerRequired")}</Label>
               <Select
                 value={data.provider}
                 onValueChange={(value) => setData({ ...data, provider: value })}
@@ -213,38 +214,36 @@ export function ModelConfigDialog({
           </div>
 
           <div className="space-y-2">
-            <Label>Model Name *</Label>
+            <Label>{t("modelName")}</Label>
             <Input
               value={data.model}
               onChange={(e) => setData({ ...data, model: e.target.value })}
-              placeholder="e.g., gpt-4, claude-3-opus, llama3"
+              placeholder={t("modelNamePlaceholder")}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>
-              {model ? "API Key (leave empty to keep existing)" : "API Key"}
-            </Label>
+            <Label>{model ? t("apiKeyKeep") : t("apiKey")}</Label>
             <Input
               type="password"
               value={data.api_key || ""}
               onChange={(e) => setData({ ...data, api_key: e.target.value })}
-              placeholder={model ? "••••••••" : "Enter API key"}
+              placeholder={model ? "••••••••" : t("apiKeyPlaceholder")}
             />
           </div>
 
           <div className="space-y-2">
-            <Label>API Base URL (Optional)</Label>
+            <Label>{t("apiBaseOptional")}</Label>
             <Input
               value={data.api_base || ""}
               onChange={(e) => setData({ ...data, api_base: e.target.value })}
-              placeholder="e.g., http://localhost:11434 for Ollama"
+              placeholder={t("apiBasePlaceholder")}
             />
           </div>
 
           {data.provider === "azure" && (
             <div className="space-y-2">
-              <Label>API Version (Azure)</Label>
+              <Label>{t("apiVersion")}</Label>
               <Input
                 value={data.api_version || ""}
                 onChange={(e) =>
@@ -256,7 +255,7 @@ export function ModelConfigDialog({
           )}
 
           <div className="space-y-2">
-            <Label>Parameters (JSON format)</Label>
+            <Label>{t("parameters")}</Label>
             {/* 修改处：使用 value 和 onChange 绑定 jsonParams 状态 */}
             <textarea
               className={`w-full min-h-[100px] px-3 py-2 text-sm border bg-background rounded-md resize-vertical focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent ${
@@ -273,8 +272,9 @@ export function ModelConfigDialog({
               <p className="text-xs text-red-500">{jsonError}</p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                Enter model parameters in JSON format. Example:{" "}
-                {'{"temperature": 0.7, "max_tokens": 1000}'}
+                {t("parameterHelp", {
+                  example: '{"temperature": 0.7, "max_tokens": 1000}',
+                })}
               </p>
             )}
           </div>
@@ -317,7 +317,7 @@ export function ModelConfigDialog({
               ) : (
                 <AlertCircle className="mr-2 h-4 w-4" />
               )}
-              Test Connection
+              {t("testConnection")}
             </Button>
           )}
           {/* 如果 JSON 格式错误，禁用保存按钮 */}
@@ -332,7 +332,11 @@ export function ModelConfigDialog({
             ) : (
               <PlusCircle className="mr-2 h-4 w-4" />
             )}
-            {isPending ? "Saving..." : model ? "Update" : "Add"}
+            {isPending
+              ? common("saving")
+              : model
+                ? common("update")
+                : common("add")}
           </Button>
         </DialogFooter>
       </DialogContent>

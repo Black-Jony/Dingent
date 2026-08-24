@@ -1,6 +1,15 @@
+"use client";
+
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
-import { DialogTrigger, DialogContent, DialogHeader, DialogTitle, Dialog } from "@/components/ui/dialog";
+import {
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Dialog,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -13,6 +22,8 @@ export function NewWorkflowDialog({
 }: {
   onCreateWorkflow: (vars: CreateWorkflowVars) => void;
 }) {
+  const t = useTranslations("Workflows");
+  const common = useTranslations("Common");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -35,31 +46,31 @@ export function NewWorkflowDialog({
       <DialogTrigger asChild>
         <Button className="gap-2">
           <Plus size={16} />
-          New Workflow
+          {t("newWorkflow")}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Create New Workflow</DialogTitle>
+          <DialogTitle>{t("createNew")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
+            <Label htmlFor="name">{t("workflowName")}</Label>
             <Input
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Enter workflow name"
+              placeholder={t("workflowNamePlaceholder")}
               required
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description">Description (Optional)</Label>
+            <Label htmlFor="description">{t("descriptionOptional")}</Label>
             <Input
               id="description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Enter workflow description"
+              placeholder={t("descriptionPlaceholder")}
             />
           </div>
           <div className="flex justify-end gap-2">
@@ -68,9 +79,9 @@ export function NewWorkflowDialog({
               variant="outline"
               onClick={() => setOpen(false)}
             >
-              Cancel
+              {common("cancel")}
             </Button>
-            <Button type="submit">Create</Button>
+            <Button type="submit">{common("create")}</Button>
           </div>
         </form>
       </DialogContent>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -32,13 +33,15 @@ export function ModelSelector({
   models,
   value,
   onChange,
-  placeholder = "Select model...",
+  placeholder,
   disabled = false,
   allowClear = true,
 }: ModelSelectorProps) {
+  const t = useTranslations("Models");
+  const displayPlaceholder = placeholder ?? t("selectModel");
   const [open, setOpen] = useState(false);
   const [selectedValue, setSelectedValue] = useState<string | null>(
-    value || null
+    value || null,
   );
 
   useEffect(() => {
@@ -72,16 +75,16 @@ export function ModelSelector({
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground">{placeholder}</span>
+            <span className="text-muted-foreground">{displayPlaceholder}</span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full p-0">
         <Command>
-          <CommandInput placeholder="Search models..." />
+          <CommandInput placeholder={t("searchModels")} />
           <CommandList>
-            <CommandEmpty>No model found.</CommandEmpty>
+            <CommandEmpty>{t("noModel")}</CommandEmpty>
             <CommandGroup>
               {allowClear && selectedValue && (
                 <CommandItem
@@ -94,11 +97,11 @@ export function ModelSelector({
                   <Check
                     className={cn(
                       "mr-2 h-4 w-4",
-                      !selectedValue ? "opacity-100" : "opacity-0"
+                      !selectedValue ? "opacity-100" : "opacity-0",
                     )}
                   />
                   <span className="text-muted-foreground italic">
-                    (Use default)
+                    ({t("useDefault")})
                   </span>
                 </CommandItem>
               )}
@@ -113,7 +116,9 @@ export function ModelSelector({
                     <Check
                       className={cn(
                         "mr-2 h-4 w-4",
-                        selectedValue === model.id ? "opacity-100" : "opacity-0"
+                        selectedValue === model.id
+                          ? "opacity-100"
+                          : "opacity-0",
                       )}
                     />
                     <div className="flex flex-col">

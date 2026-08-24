@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { Loader2, Save, X } from "lucide-react";
 
@@ -41,6 +42,8 @@ function CreateAssistantButton({
   isSaving,
   slug,
 }: CreateAssistantButtonProps) {
+  const t = useTranslations("Assistants");
+  const common = useTranslations("Common");
   // 只保留用于“创建”的逻辑，因为这和当前的编辑器状态无关
   const { createMutation } = useAssistants(slug);
 
@@ -62,20 +65,20 @@ function CreateAssistantButton({
         <DialogTrigger asChild>
           {/* 这里直接使用 props 传进来的 hasChanges */}
           <Button disabled={!hasChanges}>
-            <Save className="mr-2 h-4 w-4" /> Save Changes
+            <Save className="mr-2 h-4 w-4" /> {t("saveChanges")}
           </Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Changes</DialogTitle>
+            <DialogTitle>{t("confirmChanges")}</DialogTitle>
             <DialogDescription>
-              Save configuration for all modified assistants?
+              {t("confirmChangesDescription")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:justify-end">
             <DialogClose asChild>
               <Button variant="outline">
-                <X className="mr-2 h-4 w-4" /> Cancel
+                <X className="mr-2 h-4 w-4" /> {common("cancel")}
               </Button>
             </DialogClose>
 
@@ -85,7 +88,7 @@ function CreateAssistantButton({
               ) : (
                 <Save className="mr-2 h-4 w-4" />
               )}
-              Confirm & Save
+              {t("confirmSave")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -95,6 +98,7 @@ function CreateAssistantButton({
 }
 
 export default function AssistantsPage() {
+  const t = useTranslations("Assistants");
   const params = useParams();
   const slug = params.slug as string;
 
@@ -120,8 +124,8 @@ export default function AssistantsPage() {
   };
   return (
     <PageContainer
-      title="Assistant Configuration"
-      description="Manage assistants, plugins, and tool configurations."
+      title={t("title")}
+      description={t("description")}
       action={
         <CreateAssistantButton
           hasChanges={hasChanges}
@@ -133,15 +137,15 @@ export default function AssistantsPage() {
     >
       {assistantsQuery.isLoading && <LoadingSkeleton lines={5} />}
       {assistantsQuery.isError && (
-        <div className="text-red-600">Failed to load assistants.</div>
+        <div className="text-red-600">{t("loadError")}</div>
       )}
 
       {!assistantsQuery.isLoading &&
         !assistantsQuery.isError &&
         editable.length === 0 && (
           <EmptyState
-            title="No assistants"
-            description="Create one to get started."
+            title={t("emptyTitle")}
+            description={t("emptyDescription")}
           />
         )}
 

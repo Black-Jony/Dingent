@@ -21,7 +21,7 @@ export function ThinkingAssistantMessage(
   // because typically the UI library handles clean rendering, or you might need to
   // manually pass a cleaner message prop if Copilot doesn't handle hidden tags.
   // Assuming the original behavior was desired:
-  let cleanMessage = { ...message };
+  const cleanMessage = { ...message };
 
   if (match) {
     thinkingContent = match[1];

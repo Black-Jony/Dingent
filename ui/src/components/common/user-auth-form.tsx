@@ -20,16 +20,7 @@ import {
 import { Input } from "../ui/input";
 import { PasswordInput } from "./password-input";
 import { Button } from "../ui/button";
-
-const formSchema = z.object({
-  email: z.email({
-    error: (iss) => (iss.input === "" ? "Please enter your email" : undefined),
-  }),
-  password: z
-    .string()
-    .min(1, "Please enter your password")
-    .min(7, "Password must be at least 7 characters long"),
-});
+import { useTranslations } from "next-intl";
 
 interface UserAuthFormProps extends React.HTMLAttributes<HTMLFormElement> {
   api: ApiClient;
@@ -44,12 +35,26 @@ export function UserAuthForm({
   onLoginFail,
   ...props
 }: UserAuthFormProps) {
+  const t = useTranslations("Auth");
+  const formSchema = z.object({
+    email: z.email({
+      error: (issue) =>
+        issue.input === "" ? t("validation.emailRequired") : undefined,
+    }),
+    password: z
+      .string()
+      .min(1, t("validation.passwordRequired"))
+      .min(7, t("validation.passwordLength")),
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [authConfig, setAuthConfig] = useState<AuthConfigResponse | null>(null);
   const { setAuth } = useAuthStore();
 
   useEffect(() => {
-    api.auth.getConfig().then(setAuthConfig).catch(() => setAuthConfig(null));
+    api.auth
+      .getConfig()
+      .then(setAuthConfig)
+      .catch(() => setAuthConfig(null));
   }, [api]);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -75,12 +80,12 @@ export function UserAuthForm({
     };
 
     toast.promise(handleLoginFlow(), {
-      loading: "正在登录并加载数据...",
+      loading: t("toast.signingIn"),
       success: ({ user, access_token }) => {
         setIsLoading(false);
         // 执行跳转或其他逻辑
         onLoginSuccess(user, access_token);
-        return `欢迎回来, ${user.full_name || user.email}!`;
+        return t("toast.welcome", { name: user.full_name || user.email });
       },
       error: (err) => {
         setIsLoading(false);
@@ -88,7 +93,7 @@ export function UserAuthForm({
           onLoginFail(err);
         }
         // 这里既捕获登录错误，也捕获获取 Workspace 失败的错误
-        return err.message || "登录过程中发生错误";
+        return err.message || t("toast.loginFailed");
       },
     });
   }
@@ -118,7 +123,7 @@ export function UserAuthForm({
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>{t("email")}</FormLabel>
                   <FormControl>
                     <Input placeholder="name@example.com" {...field} />
                   </FormControl>
@@ -131,7 +136,7 @@ export function UserAuthForm({
               name="password"
               render={({ field }) => (
                 <FormItem className="relative">
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>{t("password")}</FormLabel>
                   <FormControl>
                     <PasswordInput placeholder="********" {...field} />
                   </FormControl>
@@ -140,14 +145,14 @@ export function UserAuthForm({
                     href="/forgot-password"
                     className="text-muted-foreground absolute end-0 -top-0.5 text-sm font-medium hover:opacity-75"
                   >
-                    Forgot password?
+                    {t("forgotPassword")}
                   </Link>
                 </FormItem>
               )}
             />
             <Button className="mt-2" disabled={isLoading}>
               {isLoading ? <Loader2 className="animate-spin" /> : <LogIn />}
-              Sign in
+              {t("signIn")}
             </Button>
 
             <div className="relative my-2">
@@ -155,11 +160,19 @@ export function UserAuthForm({
                 <span className="w-full border-t" />
               </div>
               <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-background text-muted-foreground px-2">Or</span>
+                <span className="bg-background text-muted-foreground px-2">
+                  {t("or")}
+                </span>
               </div>
             </div>
 
-            <div className={authConfig?.sso_enabled ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
+            <div
+              className={
+                authConfig?.sso_enabled
+                  ? "grid grid-cols-2 gap-2"
+                  : "grid gap-2"
+              }
+            >
               <Link href="/auth/sign-up">
                 <Button
                   variant="outline"
@@ -167,19 +180,30 @@ export function UserAuthForm({
                   disabled={isLoading}
                   className="w-full"
                 >
-                  Sign up
+                  {t("signUp")}
                 </Button>
               </Link>
               {authConfig?.sso_enabled && (
-                <Button variant="outline" type="button" disabled={isLoading} onClick={handleSsoLogin}>
+                <Button
+                  variant="outline"
+                  type="button"
+                  disabled={isLoading}
+                  onClick={handleSsoLogin}
+                >
                   {authConfig.sso_label || "SSO"}
                 </Button>
               )}
             </div>
           </>
         ) : (
-          <Button variant="outline" type="button" disabled={isLoading} onClick={handleSsoLogin} className="w-full">
-            {authConfig?.sso_label || "SSO"} Login
+          <Button
+            variant="outline"
+            type="button"
+            disabled={isLoading}
+            onClick={handleSsoLogin}
+            className="w-full"
+          >
+            {t("ssoLogin", { provider: authConfig?.sso_label || "SSO" })}
           </Button>
         )}
       </form>

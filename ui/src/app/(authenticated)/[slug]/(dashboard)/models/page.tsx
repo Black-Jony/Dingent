@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { LoadingSkeleton } from "@/components/common/loading-skeleton";
@@ -10,6 +11,8 @@ import { ModelsTable } from "@/features/models/components/models-table";
 import type { TestConnectionRequest } from "@/types/entity";
 
 export default function ModelsPage() {
+  const t = useTranslations("Models");
+  const common = useTranslations("Common");
   const params = useParams();
   const slug = params.slug as string;
 
@@ -27,14 +30,15 @@ export default function ModelsPage() {
   };
 
   // Safely extract the model ID being deleted
-  const deletingModelId = deleteMutation.isPending && typeof deleteMutation.variables === 'string'
-    ? deleteMutation.variables
-    : undefined;
+  const deletingModelId =
+    deleteMutation.isPending && typeof deleteMutation.variables === "string"
+      ? deleteMutation.variables
+      : undefined;
 
   return (
     <PageContainer
-      title="Model Configuration"
-      description="Manage LLM model configurations for your workspace."
+      title={t("title")}
+      description={t("description")}
       action={
         <ModelConfigDialog
           isPending={createMutation.isPending}
@@ -47,13 +51,13 @@ export default function ModelsPage() {
 
       {modelsQuery.isError && (
         <div className="flex flex-col items-center justify-center py-12 text-center">
-          <p className="text-red-600">Failed to load model configurations.</p>
+          <p className="text-red-600">{t("loadError")}</p>
           <Button
             variant="outline"
             className="mt-4"
             onClick={() => modelsQuery.refetch()}
           >
-            Retry
+            {common("retry")}
           </Button>
         </div>
       )}

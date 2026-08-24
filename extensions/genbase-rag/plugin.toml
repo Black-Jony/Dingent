@@ -1,0 +1,17 @@
+[plugin]
+id = "GenBaseRAG"
+display_name = "GenBase Knowledge Base"
+version = "0.1.0"
+spec_version = 0.1
+description = "Retrieves evidence from the curated GenBase question-answer knowledge base."
+
+[plugin.server]
+transport = "stdio"
+command = "uv"
+args = [
+    "run",
+    "python",
+    "-m",
+    "genbase_rag.server",
+]
+

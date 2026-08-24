@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   useAssistantsConfig,
   useWorkflowsList,
@@ -23,6 +24,7 @@ import type { Edge, Node } from "@xyflow/react";
 import { Workflow, WorkflowEdge, WorkflowNode } from "@/types/entity";
 
 export default function WorkflowsPage() {
+  const t = useTranslations("Workflows");
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -49,10 +51,10 @@ export default function WorkflowsPage() {
     mutationFn: ({ updates }: { updates: any }) =>
       api.workflows.update(updates),
     onSuccess: () => {
-      toast.success("Workflow updated successfully");
+      toast.success(t("updateSuccess"));
       queryClient.invalidateQueries({ queryKey: ["workflows", slug] });
     },
-    onError: (e: any) => toast.error(e.message || "Update workflow failed"),
+    onError: (e: any) => toast.error(e.message || t("updateFailed")),
   });
 
   // Helper: 处理 ID 变更，同步到 URL
@@ -90,11 +92,11 @@ export default function WorkflowsPage() {
             // 可选：静默保存或显示 "Saved"
             // toast.success("Workflow saved");
           },
-          onError: (e) => toast.error("Failed to save"),
+          onError: (e) => toast.error(t("saveFailed")),
         },
       );
     },
-    [selectedId, workflowsQ.data, saveWorkflowMutation],
+    [selectedId, workflowsQ.data, saveWorkflowMutation, t],
   );
 
   // Logic: 自动选中第一个 (可选体验优化)
@@ -112,8 +114,8 @@ export default function WorkflowsPage() {
 
   return (
     <PageContainer
-      title="Workflow Editor"
-      description="Create and manage your workflows."
+      title={t("title")}
+      description={t("description")}
       // 4. CSS: 确保容器占满剩余高度，而不是硬编码 h-screen
       className="flex flex-col h-[calc(100vh-64px)]" // 假设 Header 是 64px
     >
@@ -130,12 +132,14 @@ export default function WorkflowsPage() {
               onCreateWorkflow={(input) =>
                 createWorkflow.mutate(input, {
                   onSuccess: (wf: Workflow) => {
-                    toast.success("Workflow created");
+                    toast.success(t("created"));
                     handleSelectWorkflow(wf.id);
                   },
                   onError: (e) =>
                     toast.error(
-                      `Failed to create: ${e?.message || "Unknown error"}`,
+                      t("createFailed", {
+                        error: e?.message || t("unknownError"),
+                      }),
                     ),
                 })
               }
@@ -143,7 +147,7 @@ export default function WorkflowsPage() {
                 deleteWorkflow.mutate(id, {
                   onSuccess: () => {
                     if (selectedId === id) handleSelectWorkflow(null);
-                    toast.success("Deleted");
+                    toast.success(t("deleted"));
                   },
                 });
               }}
@@ -163,7 +167,7 @@ export default function WorkflowsPage() {
               ) : (
                 // 5. UX: 空状态处理
                 <div className="flex items-center justify-center h-full text-muted-foreground">
-                  Select or create a workflow to get started.
+                  {t("emptyCanvas")}
                 </div>
               )}
             </main>

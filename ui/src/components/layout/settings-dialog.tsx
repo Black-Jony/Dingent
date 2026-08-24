@@ -30,6 +30,7 @@ import { Label } from "../ui/label";
 import { useWorkspaceApi } from "@/hooks/use-workspace-api";
 import { toast } from "sonner";
 import { Workspace } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
 // 动态导入组件
 const ModelSelector = React.lazy(() =>
@@ -37,29 +38,6 @@ const ModelSelector = React.lazy(() =>
     default: module.ModelSelector,
   })),
 );
-
-const sidebarNavItems = [
-  {
-    title: "Account",
-    items: [
-      { id: "my-account", title: "My Account", icon: User },
-      { id: "preferences", title: "Preferences", icon: Settings },
-      { id: "notifications", title: "Notifications", icon: Bell },
-      { id: "connections", title: "Connections", icon: Link },
-    ],
-  },
-  {
-    title: "Workspace",
-    items: [
-      { id: "general", title: "General", icon: Settings },
-      { id: "people", title: "People", icon: Users },
-      { id: "teamspaces", title: "Teamspaces", icon: Briefcase },
-      { id: "security", title: "Security", icon: Shield },
-      { id: "identity", title: "Identity", icon: Lock },
-      { id: "billing", title: "Billing", icon: CreditCard },
-    ],
-  },
-];
 
 interface SettingsDialogProps {
   open: boolean;
@@ -74,7 +52,37 @@ export function SettingsDialog({
   defaultTab = "people",
   workspace,
 }: SettingsDialogProps) {
+  const t = useTranslations("Settings");
   const [activeTab, setActiveTab] = React.useState(defaultTab);
+  const sidebarNavItems = React.useMemo(
+    () => [
+      {
+        title: t("groups.account"),
+        items: [
+          { id: "my-account", title: t("nav.myAccount"), icon: User },
+          { id: "preferences", title: t("nav.preferences"), icon: Settings },
+          { id: "notifications", title: t("nav.notifications"), icon: Bell },
+          { id: "connections", title: t("nav.connections"), icon: Link },
+        ],
+      },
+      {
+        title: t("groups.workspace"),
+        items: [
+          { id: "general", title: t("nav.general"), icon: Settings },
+          { id: "people", title: t("nav.people"), icon: Users },
+          { id: "teamspaces", title: t("nav.teamspaces"), icon: Briefcase },
+          { id: "security", title: t("nav.security"), icon: Shield },
+          { id: "identity", title: t("nav.identity"), icon: Lock },
+          { id: "billing", title: t("nav.billing"), icon: CreditCard },
+        ],
+      },
+    ],
+    [t],
+  );
+  const activeTabTitle =
+    sidebarNavItems
+      .flatMap((group) => group.items)
+      .find((item) => item.id === activeTab)?.title ?? activeTab;
 
   React.useEffect(() => {
     if (open) {
@@ -85,9 +93,9 @@ export function SettingsDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="!max-w-none w-[90vw] h-[85vh] p-0 gap-0 overflow-hidden flex bg-background sm:rounded-xl">
-        <DialogTitle className="sr-only">Workspace Settings</DialogTitle>
+        <DialogTitle className="sr-only">{t("dialogTitle")}</DialogTitle>
         <DialogDescription className="sr-only">
-          Manage your workspace settings, members, and preferences.
+          {t("dialogDescription")}
         </DialogDescription>
 
         {/* === 左侧侧边栏 === */}
@@ -135,7 +143,7 @@ export function SettingsDialog({
               <span className="size-4 rounded-full border border-blue-600 flex items-center justify-center text-[10px]">
                 ↑
               </span>
-              Upgrade Plan
+              {t("upgradePlan")}
             </Button>
           </div>
         </div>
@@ -148,7 +156,7 @@ export function SettingsDialog({
             <PeopleSettingsContent />
           ) : (
             <div className="p-8 flex items-center justify-center h-full text-muted-foreground">
-              Content for {activeTab}
+              {t("contentUnavailable", { tab: activeTabTitle })}
             </div>
           )}
         </div>
@@ -162,6 +170,7 @@ interface GeneralSettingsContentProps {
 }
 
 function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
+  const t = useTranslations("Settings");
   const { workspacesApi } = useWorkspaceApi();
   const [guestAccessEnabled, setGuestAccessEnabled] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
@@ -206,10 +215,12 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         allow_guest_access: enabled,
       });
       setGuestAccessEnabled(enabled);
-      toast.success(enabled ? "Guest access enabled" : "Guest access disabled");
+      toast.success(
+        enabled ? t("toast.guestEnabled") : t("toast.guestDisabled"),
+      );
     } catch (error) {
       console.error("Failed to update workspace:", error);
-      toast.error("Failed to update workspace settings");
+      toast.error(t("toast.updateSettingsFailed"));
     } finally {
       setIsUpdating(false);
     }
@@ -218,9 +229,9 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(guestLink);
-      toast.success("Guest link copied to clipboard");
+      toast.success(t("toast.guestLinkCopied"));
     } catch (error) {
-      toast.error("Failed to copy link");
+      toast.error(t("toast.copyFailed"));
     }
   };
 
@@ -235,10 +246,10 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         description: workspaceDescription,
         default_model_config_id: defaultModelConfigId,
       });
-      toast.success("Workspace updated successfully");
+      toast.success(t("toast.workspaceUpdated"));
     } catch (error) {
       console.error("Failed to update workspace:", error);
-      toast.error("Failed to update workspace");
+      toast.error(t("toast.workspaceUpdateFailed"));
     } finally {
       setIsUpdating(false);
     }
@@ -247,7 +258,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
   if (!workspace) {
     return (
       <div className="p-8 flex items-center justify-center h-full text-muted-foreground">
-        No workspace selected
+        {t("general.noWorkspace")}
       </div>
     );
   }
@@ -256,13 +267,13 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
     <div className="flex flex-col h-full">
       <div className="px-8 pt-8 pb-4">
         <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
-          General
+          {t("general.title")}
           <span className="text-muted-foreground cursor-help text-xs border rounded-full size-4 flex items-center justify-center">
             ?
           </span>
         </h2>
         <p className="text-sm text-muted-foreground">
-          Manage your workspace settings and guest access
+          {t("general.description")}
         </p>
       </div>
 
@@ -270,24 +281,30 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         <div className="space-y-8 max-w-2xl">
           {/* === Basic Information === */}
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Basic Information</h3>
+            <h3 className="text-sm font-semibold">
+              {t("general.basicInformation")}
+            </h3>
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label htmlFor="workspace-name">Workspace Name</Label>
+                <Label htmlFor="workspace-name">
+                  {t("general.workspaceName")}
+                </Label>
                 <Input
                   id="workspace-name"
                   value={workspaceName}
                   onChange={(e) => setWorkspaceName(e.target.value)}
-                  placeholder="Enter workspace name"
+                  placeholder={t("general.workspaceNamePlaceholder")}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="workspace-description">Description</Label>
+                <Label htmlFor="workspace-description">
+                  {t("general.workspaceDescription")}
+                </Label>
                 <Input
                   id="workspace-description"
                   value={workspaceDescription}
                   onChange={(e) => setWorkspaceDescription(e.target.value)}
-                  placeholder="Enter workspace description (optional)"
+                  placeholder={t("general.workspaceDescriptionPlaceholder")}
                 />
               </div>
               {/* 删除了此处多余的 Save 按钮 */}
@@ -297,15 +314,16 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
           {/* === Default Model Configuration === */}
           <div className="space-y-4 pt-6 border-t">
             <h3 className="text-sm font-semibold">
-              Default Model Configuration
+              {t("general.defaultModelConfiguration")}
             </h3>
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Set a default LLM model for this workspace. This will be used by
-                workflows and assistants that don't specify their own model.
+                {t("general.defaultModelDescription")}
               </p>
               <div className="space-y-2">
-                <Label htmlFor="default-model">Default Model</Label>
+                <Label htmlFor="default-model">
+                  {t("general.defaultModel")}
+                </Label>
                 <React.Suspense
                   fallback={
                     <div className="h-10 bg-muted animate-pulse rounded" />
@@ -318,19 +336,19 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                       onChange={(val: any) => {
                         setDefaultModelConfigId(val || null);
                       }}
-                      placeholder="Use environment default"
+                      placeholder={t("general.environmentDefault")}
                       allowClear={true}
                     />
                   ) : (
                     <div className="text-sm text-muted-foreground">
-                      No models configured.{" "}
+                      {t("general.noModels")}{" "}
                       <a
                         href={`/${workspace.slug}/models`}
                         className="text-primary underline"
                       >
-                        Configure models
+                        {t("general.configureModels")}
                       </a>{" "}
-                      first.
+                      {t("general.first")}
                     </div>
                   )}
                 </React.Suspense>
@@ -345,7 +363,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
               disabled={isUpdating}
               size="sm"
             >
-              Save All Changes
+              {t("general.saveAll")}
             </Button>
           </div>
 
@@ -355,10 +373,10 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Globe className="size-4" />
-                  Guest Access
+                  {t("general.guestAccess")}
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Allow visitors to access your workspace without signing in
+                  {t("general.guestAccessDescription")}
                 </p>
               </div>
               <Switch
@@ -374,7 +392,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                   <div className="flex items-center gap-2">
                     <ExternalLink className="size-4 text-muted-foreground" />
                     <span className="text-sm font-medium">
-                      Shareable Guest Link
+                      {t("general.shareableGuestLink")}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -382,7 +400,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                       value={guestLink}
                       readOnly
                       className="font-mono text-xs flex-1"
-                      aria-label="Shareable guest link"
+                      aria-label={t("general.guestLinkAria")}
                     />
                     <Button
                       variant="outline"
@@ -391,21 +409,20 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                       className="shrink-0"
                     >
                       <Copy className="size-4 mr-1" />
-                      Copy
+                      {t("general.copy")}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Share this link with anyone you want to grant guest access.
+                    {t("general.shareGuestLinkHelp")}
                   </p>
                 </div>
 
                 <div className="p-3 border rounded-md bg-blue-50 dark:bg-blue-950/20 text-sm">
                   <div className="font-medium text-blue-900 dark:text-blue-100 mb-1">
-                    Security Note
+                    {t("general.securityNote")}
                   </div>
                   <p className="text-blue-800 dark:text-blue-200 text-xs">
-                    Guest conversations are isolated and guests cannot access
-                    other users data.
+                    {t("general.securityNoteDescription")}
                   </p>
                 </div>
               </div>
@@ -419,11 +436,12 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
 
 // PeopleSettingsContent 保持不变
 function PeopleSettingsContent() {
+  const t = useTranslations("Settings");
   return (
     <div className="flex flex-col h-full">
       <div className="px-8 pt-8 pb-4">
         <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
-          People
+          {t("people.title")}
           <span className="text-muted-foreground cursor-help text-xs border rounded-full size-4 flex items-center justify-center">
             ?
           </span>
@@ -433,15 +451,15 @@ function PeopleSettingsContent() {
       <ScrollArea className="flex-1 px-8 pb-8">
         <div className="mb-8">
           <div className="text-sm font-medium mb-2">
-            Invite link to add members
+            {t("people.inviteLink")}
           </div>
           <div className="flex items-center justify-between p-3 border rounded-md bg-card">
             <div className="text-xs text-muted-foreground">
-              Only people with permission to invite members can see this.
+              {t("people.invitePermission")}
             </div>
             <div className="flex items-center gap-3">
               <Button variant="outline" size="sm" className="h-7 text-xs">
-                Copy link
+                {t("people.copyLink")}
               </Button>
               <Switch defaultChecked />
             </div>
@@ -455,29 +473,30 @@ function PeopleSettingsContent() {
                 value="guests"
                 className="px-0 py-2 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none font-normal"
               >
-                Guests
+                {t("people.guests")}
               </TabsTrigger>
               <TabsTrigger
                 value="members"
                 className="px-0 py-2 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none font-normal"
               >
-                Members <span className="ml-1 text-muted-foreground">1</span>
+                {t("people.members")}{" "}
+                <span className="ml-1 text-muted-foreground">1</span>
               </TabsTrigger>
               <TabsTrigger
                 value="groups"
                 className="px-0 py-2 rounded-none bg-transparent border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:shadow-none font-normal"
               >
-                Groups
+                {t("people.groups")}
               </TabsTrigger>
             </TabsList>
 
             <div className="flex items-center gap-2 py-2">
               <Input
-                placeholder="Filter by name..."
+                placeholder={t("people.filterPlaceholder")}
                 className="h-8 w-[150px] lg:w-[200px]"
               />
               <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700">
-                Add members
+                {t("people.addMembers")}
               </Button>
             </div>
           </div>
@@ -491,9 +510,9 @@ function PeopleSettingsContent() {
                   </div>
                   <div>
                     <div className="text-sm font-medium">
-                      Saya's Notion{" "}
+                      Saya&apos;s Notion{" "}
                       <span className="ml-2 text-xs text-muted-foreground">
-                        (You)
+                        ({t("people.you")})
                       </span>
                     </div>
                     <div className="text-xs text-muted-foreground">
@@ -502,7 +521,7 @@ function PeopleSettingsContent() {
                   </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Workspace Owner
+                  {t("people.workspaceOwner")}
                 </div>
               </div>
             </div>
@@ -511,7 +530,7 @@ function PeopleSettingsContent() {
           <TabsContent value="guests" className="mt-10 text-center">
             <div className="flex flex-col items-center justify-center text-muted-foreground">
               <Users className="size-10 mb-3 opacity-20" />
-              <p className="text-sm">No guests yet</p>
+              <p className="text-sm">{t("people.noGuests")}</p>
             </div>
           </TabsContent>
         </Tabs>

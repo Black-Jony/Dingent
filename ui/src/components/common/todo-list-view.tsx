@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { CheckCircle2, Circle, ListTodo, Loader2 } from "lucide-react";
 
 interface TodoItem {
@@ -6,17 +9,20 @@ interface TodoItem {
 }
 
 export function TodoListView({ data }: { data: TodoItem[] }) {
+  const t = useTranslations("Renderer");
   const todos = data;
 
   if (!todos || !Array.isArray(todos)) {
-    return <div className="text-gray-500">Invalid todo list data.</div>;
+    return <div className="text-gray-500">{t("invalidTodo")}</div>;
   }
 
   return (
     <div className="w-full my-4 border rounded-lg overflow-hidden bg-white shadow-sm">
       <div className="bg-gray-50 px-4 py-3 border-b flex items-center gap-2">
         <ListTodo className="w-4 h-4 text-gray-600" />
-        <h3 className="font-semibold text-sm text-gray-700">Execution Plan</h3>
+        <h3 className="font-semibold text-sm text-gray-700">
+          {t("executionPlan")}
+        </h3>
       </div>
       <div className="divide-y">
         {todos.map((todo, idx) => {

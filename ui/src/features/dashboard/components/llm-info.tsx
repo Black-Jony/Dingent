@@ -1,4 +1,5 @@
 import { Skeleton } from "@/components/ui/skeleton";
+import { useTranslations } from "next-intl";
 
 export function LLMInfo({
   llm,
@@ -7,13 +8,12 @@ export function LLMInfo({
   llm: Record<string, any>;
   loading?: boolean;
 }) {
+  const t = useTranslations("Overview");
   if (loading) {
     return <Skeleton className="h-6 w-40" />;
   }
   if (!llm || Object.keys(llm).length === 0) {
-    return (
-      <div className="text-muted-foreground text-sm">No LLM configured.</div>
-    );
+    return <div className="text-muted-foreground text-sm">{t("noLlm")}</div>;
   }
   const displayPairs = Object.entries(llm).slice(0, 6);
   return (

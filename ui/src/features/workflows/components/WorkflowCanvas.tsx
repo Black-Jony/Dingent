@@ -1,6 +1,12 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import { ReactFlow, ReactFlowProvider, Background, Controls } from "@xyflow/react";
+import { useTranslations } from "next-intl";
+import {
+  ReactFlow,
+  ReactFlowProvider,
+  Background,
+  Controls,
+} from "@xyflow/react";
 import { useFlowLogic } from "../hooks/useFlowLogic";
 import { Save } from "lucide-react";
 import { nodeTypes } from "../components/nodes";
@@ -22,6 +28,8 @@ interface CanvasProps {
 }
 
 function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
+  const t = useTranslations("Workflows");
+  const common = useTranslations("Common");
   const params = useParams();
   const slug = params.slug as string;
   const api = getClientApi();
@@ -37,22 +45,26 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
   // 1. 初始化数据 (Hydration)
   useEffect(() => {
     if (workflowData) {
-      const { nodes: initNodes, edges: initEdges } = normalizeWorkflow(workflowData);
+      const { nodes: initNodes, edges: initEdges } =
+        normalizeWorkflow(workflowData);
       setNodes(initNodes);
       setEdges(initEdges);
     }
   }, [workflowData]);
   useEffect(() => {
     const ids = new Set(
-      nodes
-        .map((n) => n.data?.assistantId as string)
-        .filter(Boolean)
+      nodes.map((n) => n.data?.assistantId as string).filter(Boolean),
     );
     setUsedAssistantIds(ids);
   }, [nodes, setUsedAssistantIds]);
 
   // 2. 引入逻辑 Hook
-  const { onNodesChange, onEdgesChange, onConnect, onDrop } = useFlowLogic(nodes, setNodes, edges, setEdges);
+  const { onNodesChange, onEdgesChange, onConnect, onDrop } = useFlowLogic(
+    nodes,
+    setNodes,
+    edges,
+    setEdges,
+  );
 
   // 处理 DragOver，必须允许 drop
   const onDragOver = (event: React.DragEvent) => {
@@ -60,13 +72,20 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
     event.dataTransfer.dropEffect = "move";
   };
   if (!workflowId) {
-    return <div className="flex h-full items-center justify-center text-muted-foreground">Select a workflow to start editing</div>;
+    return (
+      <div className="flex h-full items-center justify-center text-muted-foreground">
+        {t("selectToEdit")}
+      </div>
+    );
   }
 
   if (isLoading) {
-    return <div className="flex h-full items-center justify-center"><LoadingSkeleton /></div>;
+    return (
+      <div className="flex h-full items-center justify-center">
+        <LoadingSkeleton />
+      </div>
+    );
   }
-
 
   return (
     <div className="h-full w-full relative" ref={wrapperRef}>
@@ -76,7 +95,7 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
         size="sm"
       >
         <Save className="mr-2 h-4 w-4" />
-        {isSaving ? "Saving..." : "Save Workflow"}
+        {isSaving ? common("saving") : t("saveWorkflow")}
       </Button>
       <ReactFlow
         nodes={nodes}

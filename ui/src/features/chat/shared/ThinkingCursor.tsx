@@ -18,7 +18,6 @@ export function ThinkingCursor({ className }: { className?: string }) {
       content={thinkingText}
       isThinking={isThinking}
       className={className}
-      label="Thinking Process..."
     />
   );
 }

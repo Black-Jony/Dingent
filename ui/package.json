@@ -20,6 +20,8 @@
     "@types/react-dom": "19.2.3",
     "@types/uuid": "^11.0.0",
     "barrelsby": "^2.8.1",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.1.0",
     "fastbench": "^1.0.1",
     "jsdom": "^29.1.1",
     "pino-elasticsearch": "^8.1.0",
@@ -40,6 +42,9 @@
     "@types/react-dom": "^19.1.1"
   },
   "packageManager": "bun@1.2.20",
+  "patchedDependencies": {
+    "@copilotkit/react-core@1.57.1": "patches/@copilotkit%2Freact-core@1.57.1.patch"
+  },
   "trustedDependencies": [
     "@parcel/watcher",
     "esbuild",
@@ -70,6 +75,7 @@
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.562.0",
     "next": "^16.1.0",
+    "next-intl": "^4.13.7",
     "postcss": "^8.5.6",
     "radix-ui": "^1.4.3",
     "react": "^19.2.3",

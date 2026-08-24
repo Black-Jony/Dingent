@@ -22,7 +22,7 @@ export function useOptimizedMarkdown(rawContent: string) {
     // 捕获组 2: base64 数据
     const regex = /!\[(.*?)\]\((data:image\/.*?;base64,.*?)\)/g;
 
-    let lastIndex = 0;
+    const lastIndex = 0;
     let newContent = "";
     let match;
 

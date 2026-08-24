@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { EmptyState } from "@/components/common/empty-state";
 import {
   AlertDialog,
@@ -30,14 +33,14 @@ export function WorkflowList({
   onUpdateWorkflow?: (workflowId: string, updates: any) => void;
   isUpdating?: boolean;
 }) {
+  const t = useTranslations("Workflows");
+  const common = useTranslations("Common");
+
   return (
     <div>
-      <h3 className="mb-2 font-semibold">Workflows</h3>
+      <h3 className="mb-2 font-semibold">{t("workflows")}</h3>
       {workflows.length === 0 ? (
-        <EmptyState
-          title="No workflows"
-          description="Create your first workflow to get started"
-        />
+        <EmptyState title={t("listEmpty")} description={t("listEmptyHelp")} />
       ) : (
         <div className="max-h-[300px] space-y-2 overflow-y-auto">
           {workflows.map((workflow) => (
@@ -96,13 +99,14 @@ export function WorkflowList({
                       // 阻止 Dialog 内部点击冒泡（通常不需要，因为是 Portal，但加上保险）
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <AlertDialogTitle>Delete Workflow</AlertDialogTitle>
+                      <AlertDialogTitle>{t("deleteTitle")}</AlertDialogTitle>
                       <AlertDialogDescription>
-                        Are you sure you want to delete "{workflow.name}"? This
-                        action cannot be undone.
+                        {t("deleteDescription", { name: workflow.name })}
                       </AlertDialogDescription>
                       <div className="flex justify-end gap-2">
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>
+                          {common("cancel")}
+                        </AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-destructive hover:bg-destructive/90" // 建议使用 destructive 样式
                           onClick={(e) => {
@@ -111,7 +115,7 @@ export function WorkflowList({
                             onDelete(workflow.id);
                           }}
                         >
-                          Delete
+                          {common("delete")}
                         </AlertDialogAction>
                       </div>
                     </AlertDialogContent>

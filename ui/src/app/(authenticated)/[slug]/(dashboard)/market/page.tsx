@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
 import { toast } from "sonner";
@@ -20,6 +21,7 @@ import {
 import { MarketItem } from "@/types/entity";
 
 export default function MarketPage() {
+  const t = useTranslations("Market");
   const params = useParams();
   const slug = params.slug as string;
   const api = getClientApi();
@@ -46,7 +48,7 @@ export default function MarketPage() {
     if (error) {
       return (
         <div className="flex h-40 items-center justify-center text-red-500 bg-red-50/50 rounded-lg border border-red-100">
-          Failed to load market items. Please try again later.
+          {t("loadError")}
         </div>
       );
     }
@@ -54,8 +56,8 @@ export default function MarketPage() {
     if (filteredItems.length === 0) {
       return (
         <EmptyState
-          title="No items found"
-          description="Try adjusting your filters or search terms."
+          title={t("noItems")}
+          description={t("noItemsDescription")}
         />
       );
     }
@@ -78,10 +80,7 @@ export default function MarketPage() {
   };
 
   return (
-    <PageContainer
-      title="Marketplace Integrations"
-      description="Browse plugins, assistants, and workflows from the community marketplace."
-    >
+    <PageContainer title={t("title")} description={t("description")}>
       <MarketToolbar />
       <Separator className="shadow-sm my-4" /> {/* 增加一点 margin */}
       <div className="min-h-[200px]">{renderContent()}</div>

@@ -1,4 +1,11 @@
-import { AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+"use client";
+
+import { useTranslations } from "next-intl";
+import {
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/common/confirm-dialog";
 import { StatusBadge } from "@/components/common/status-badge";
@@ -31,8 +38,11 @@ export function AssistantItem({
   onUpdate,
   onDelete,
   isDeleting,
-  pluginActions
+  pluginActions,
 }: AssistantItemProps) {
+  const t = useTranslations("Assistants");
+  const common = useTranslations("Common");
+  const assistantName = assistant.name || t("unnamed");
   const enabled = safeBool(assistant.enabled, false);
   const { level, label } = effectiveStatusForItem(assistant.status, enabled);
 
@@ -40,21 +50,23 @@ export function AssistantItem({
     <AccordionItem value={assistant.id} className="rounded-lg border">
       <AccordionTrigger className="px-4 py-3 text-lg font-semibold hover:no-underline">
         <div className="flex w-full items-center justify-between gap-4 pr-4">
-          <span className="truncate">{assistant.name || "Unnamed"}</span>
+          <span className="truncate">{assistantName}</span>
           <StatusBadge level={level} label={label} title={assistant.status} />
         </div>
       </AccordionTrigger>
       <AccordionContent className="p-4 pt-0">
         <div className="mb-4 flex justify-end">
           <ConfirmDialog
-            title="Confirm Delete"
-            description={`Delete '${assistant.name}'?`}
-            confirmText="Delete"
+            title={t("confirmDelete")}
+            description={t("deleteDescription", { name: assistantName })}
+            confirmText={common("delete")}
             onConfirm={() => onDelete(assistant.id)}
             trigger={
               <Button variant="destructive" size="sm" disabled={isDeleting}>
-                {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Delete Assistant
+                {isDeleting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
+                {t("deleteAssistant")}
               </Button>
             }
           />
@@ -64,10 +76,14 @@ export function AssistantItem({
           onChange={onUpdate}
           availablePlugins={plugins}
           availableModels={models}
-          onAddPlugin={(pluginId) => pluginActions.add({ assistantId: assistant.id, pluginId })}
+          onAddPlugin={(pluginId) =>
+            pluginActions.add({ assistantId: assistant.id, pluginId })
+          }
           isAddingPlugin={pluginActions.isAdding}
           addingPluginDetails={pluginActions.addingVars}
-          onRemovePlugin={(pluginId) => pluginActions.remove({ assistantId: assistant.id, pluginId })}
+          onRemovePlugin={(pluginId) =>
+            pluginActions.remove({ assistantId: assistant.id, pluginId })
+          }
           isRemovingPlugin={pluginActions.isRemoving}
           removingPluginDetails={pluginActions.removingVars}
         />

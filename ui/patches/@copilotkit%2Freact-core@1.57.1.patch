@@ -1,0 +1,166 @@
+diff --git a/dist/copilotkit-C3k13WZn.cjs b/dist/copilotkit-C3k13WZn.cjs
+index ea59cf8..c6f92e1 100644
+--- a/dist/copilotkit-C3k13WZn.cjs
++++ b/dist/copilotkit-C3k13WZn.cjs
+@@ -613,7 +613,7 @@ CopilotChatAudioRecorder.displayName = "CopilotChatAudioRecorder";
+ //#region src/v2/components/chat/CopilotChatInput.tsx
+ const SLASH_MENU_MAX_VISIBLE_ITEMS = 5;
+ const SLASH_MENU_ITEM_HEIGHT_PX = 40;
+-function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning = false, onStartTranscribe, onCancelTranscribe, onFinishTranscribe, onFinishTranscribeWithAudio, onAddFile, onChange, value, toolsMenu, autoFocus = false, positioning = "static", keyboardHeight = 0, containerRef, showDisclaimer, bottomAnchored = false, textArea, sendButton, startTranscribeButton, cancelTranscribeButton, finishTranscribeButton, addMenuButton, audioRecorder, disclaimer, children, className, ...props }) {
++function CopilotChatInput({ mode = "input", onSubmitMessage, allowEmptySubmit = false, onStop, isRunning = false, onStartTranscribe, onCancelTranscribe, onFinishTranscribe, onFinishTranscribeWithAudio, onAddFile, onChange, value, toolsMenu, autoFocus = false, positioning = "static", keyboardHeight = 0, containerRef, showDisclaimer, bottomAnchored = false, textArea, sendButton, startTranscribeButton, cancelTranscribeButton, finishTranscribeButton, addMenuButton, audioRecorder, disclaimer, children, className, ...props }) {
+ 	const isControlled = value !== void 0;
+ 	const [internalValue, setInternalValue] = (0, react.useState)(() => value ?? "");
+ 	(0, react.useEffect)(() => {
+@@ -801,7 +801,7 @@ function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning =
+ 	const send = () => {
+ 		if (!onSubmitMessage) return;
+ 		const trimmed = resolvedValue.trim();
+-		if (!trimmed) return;
++		if (!trimmed && !allowEmptySubmit) return;
+ 		onSubmitMessage(trimmed);
+ 		if (!isControlled) setInternalValue("");
+ 		onChange?.("");
+@@ -822,7 +822,7 @@ function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning =
+ 		className: (0, tailwind_merge.twMerge)("cpk:w-full cpk:py-3", isExpanded ? "cpk:px-5" : "cpk:pr-5")
+ 	});
+ 	const isProcessing = mode !== "transcribe" && isRunning;
+-	const canSend = resolvedValue.trim().length > 0 && !!onSubmitMessage;
++	const canSend = (resolvedValue.trim().length > 0 || allowEmptySubmit) && !!onSubmitMessage;
+ 	const canStop = !!onStop;
+ 	const handleSendButtonClick = () => {
+ 		if (isProcessing) {
+@@ -6508,8 +6508,10 @@ function CopilotChatView({ messageView, input, scrollView, suggestionView, welco
+ 		messages,
+ 		isRunning
+ 	});
++	const allowEmptySubmit = attachments?.some((attachment) => attachment.status === "ready") ?? false;
+ 	const BoundInput = renderSlot(input, CopilotChatInput_default, {
+ 		onSubmitMessage,
++		allowEmptySubmit,
+ 		onStop,
+ 		mode: inputMode,
+ 		value: inputValue,
+@@ -6552,6 +6554,7 @@ function CopilotChatView({ messageView, input, scrollView, suggestionView, welco
+ 	if (messages.length === 0 && !(welcomeScreen === false) && !isConnecting && !hasExplicitThreadId) {
+ 		const BoundInputForWelcome = renderSlot(input, CopilotChatInput_default, {
+ 			onSubmitMessage,
++			allowEmptySubmit,
+ 			onStop,
+ 			mode: inputMode,
+ 			value: inputValue,
+diff --git a/dist/copilotkit-DjxXMYHG.mjs b/dist/copilotkit-DjxXMYHG.mjs
+index 9c173b4..2ea35e0 100644
+--- a/dist/copilotkit-DjxXMYHG.mjs
++++ b/dist/copilotkit-DjxXMYHG.mjs
+@@ -583,7 +583,7 @@ CopilotChatAudioRecorder.displayName = "CopilotChatAudioRecorder";
+ //#region src/v2/components/chat/CopilotChatInput.tsx
+ const SLASH_MENU_MAX_VISIBLE_ITEMS = 5;
+ const SLASH_MENU_ITEM_HEIGHT_PX = 40;
+-function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning = false, onStartTranscribe, onCancelTranscribe, onFinishTranscribe, onFinishTranscribeWithAudio, onAddFile, onChange, value, toolsMenu, autoFocus = false, positioning = "static", keyboardHeight = 0, containerRef, showDisclaimer, bottomAnchored = false, textArea, sendButton, startTranscribeButton, cancelTranscribeButton, finishTranscribeButton, addMenuButton, audioRecorder, disclaimer, children, className, ...props }) {
++function CopilotChatInput({ mode = "input", onSubmitMessage, allowEmptySubmit = false, onStop, isRunning = false, onStartTranscribe, onCancelTranscribe, onFinishTranscribe, onFinishTranscribeWithAudio, onAddFile, onChange, value, toolsMenu, autoFocus = false, positioning = "static", keyboardHeight = 0, containerRef, showDisclaimer, bottomAnchored = false, textArea, sendButton, startTranscribeButton, cancelTranscribeButton, finishTranscribeButton, addMenuButton, audioRecorder, disclaimer, children, className, ...props }) {
+ 	const isControlled = value !== void 0;
+ 	const [internalValue, setInternalValue] = useState(() => value ?? "");
+ 	useEffect(() => {
+@@ -771,7 +771,7 @@ function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning =
+ 	const send = () => {
+ 		if (!onSubmitMessage) return;
+ 		const trimmed = resolvedValue.trim();
+-		if (!trimmed) return;
++		if (!trimmed && !allowEmptySubmit) return;
+ 		onSubmitMessage(trimmed);
+ 		if (!isControlled) setInternalValue("");
+ 		onChange?.("");
+@@ -792,7 +792,7 @@ function CopilotChatInput({ mode = "input", onSubmitMessage, onStop, isRunning =
+ 		className: twMerge("cpk:w-full cpk:py-3", isExpanded ? "cpk:px-5" : "cpk:pr-5")
+ 	});
+ 	const isProcessing = mode !== "transcribe" && isRunning;
+-	const canSend = resolvedValue.trim().length > 0 && !!onSubmitMessage;
++	const canSend = (resolvedValue.trim().length > 0 || allowEmptySubmit) && !!onSubmitMessage;
+ 	const canStop = !!onStop;
+ 	const handleSendButtonClick = () => {
+ 		if (isProcessing) {
+@@ -6478,8 +6478,10 @@ function CopilotChatView({ messageView, input, scrollView, suggestionView, welco
+ 		messages,
+ 		isRunning
+ 	});
++	const allowEmptySubmit = attachments?.some((attachment) => attachment.status === "ready") ?? false;
+ 	const BoundInput = renderSlot(input, CopilotChatInput_default, {
+ 		onSubmitMessage,
++		allowEmptySubmit,
+ 		onStop,
+ 		mode: inputMode,
+ 		value: inputValue,
+@@ -6522,6 +6524,7 @@ function CopilotChatView({ messageView, input, scrollView, suggestionView, welco
+ 	if (messages.length === 0 && !(welcomeScreen === false) && !isConnecting && !hasExplicitThreadId) {
+ 		const BoundInputForWelcome = renderSlot(input, CopilotChatInput_default, {
+ 			onSubmitMessage,
++			allowEmptySubmit,
+ 			onStop,
+ 			mode: inputMode,
+ 			value: inputValue,
+diff --git a/src/v2/components/chat/CopilotChatInput.tsx b/src/v2/components/chat/CopilotChatInput.tsx
+index 098664b..0b2e190 100644
+--- a/src/v2/components/chat/CopilotChatInput.tsx
++++ b/src/v2/components/chat/CopilotChatInput.tsx
+@@ -70,6 +70,8 @@ type CopilotChatInputRestProps = {
+   toolsMenu?: (ToolsMenuItem | "-")[];
+   autoFocus?: boolean;
+   onSubmitMessage?: (value: string) => void;
++  /** Allow submitting an empty text value when a ready attachment is present. */
++  allowEmptySubmit?: boolean;
+   onStop?: () => void;
+   isRunning?: boolean;
+   onStartTranscribe?: () => void;
+@@ -128,6 +130,7 @@ const SLASH_MENU_ITEM_HEIGHT_PX = 40;
+ export function CopilotChatInput({
+   mode = "input",
+   onSubmitMessage,
++  allowEmptySubmit = false,
+   onStop,
+   isRunning = false,
+   onStartTranscribe,
+@@ -469,7 +472,7 @@ export function CopilotChatInput({
+       return;
+     }
+     const trimmed = resolvedValue.trim();
+-    if (!trimmed) {
++    if (!trimmed && !allowEmptySubmit) {
+       return;
+     }
+ 
+@@ -506,7 +509,9 @@ export function CopilotChatInput({
+   });
+ 
+   const isProcessing = mode !== "transcribe" && isRunning;
+-  const canSend = resolvedValue.trim().length > 0 && !!onSubmitMessage;
++  const canSend =
++    (resolvedValue.trim().length > 0 || allowEmptySubmit) &&
++    !!onSubmitMessage;
+   const canStop = !!onStop;
+ 
+   const handleSendButtonClick = () => {
+diff --git a/src/v2/components/chat/CopilotChatView.tsx b/src/v2/components/chat/CopilotChatView.tsx
+index 40366c6..aca7a53 100644
+--- a/src/v2/components/chat/CopilotChatView.tsx
++++ b/src/v2/components/chat/CopilotChatView.tsx
+@@ -241,8 +241,12 @@ export function CopilotChatView({
+     isRunning,
+   });
+ 
++  const allowEmptySubmit =
++    attachments?.some((attachment) => attachment.status === "ready") ?? false;
++
+   const BoundInput = renderSlot(input, CopilotChatInput, {
+     onSubmitMessage,
++    allowEmptySubmit,
+     onStop,
+     mode: inputMode,
+     value: inputValue,
+@@ -321,6 +325,7 @@ export function CopilotChatView({
+     // Create a separate input for welcome screen with static positioning and disclaimer visible
+     const BoundInputForWelcome = renderSlot(input, CopilotChatInput, {
+       onSubmitMessage,
++      allowEmptySubmit,
+       onStop,
+       mode: inputMode,
+       value: inputValue,

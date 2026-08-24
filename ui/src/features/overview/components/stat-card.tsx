@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -11,6 +14,7 @@ export function StatCard(props: {
   error?: boolean;
   className?: string;
 }) {
+  const t = useTranslations("Renderer");
   const { title, value, sub, icon, loading, error, className } = props;
   return (
     <Card className={cn(className)}>
@@ -26,7 +30,7 @@ export function StatCard(props: {
         {loading ? (
           <Skeleton className="h-7 w-24" />
         ) : error ? (
-          <div className="text-destructive text-sm">Error</div>
+          <div className="text-destructive text-sm">{t("error")}</div>
         ) : (
           <div className="text-2xl font-bold">{value}</div>
         )}

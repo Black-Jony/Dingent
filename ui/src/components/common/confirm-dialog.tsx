@@ -1,3 +1,5 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import {
@@ -11,6 +13,7 @@ import {
   AlertDialogTrigger, // 引入 Trigger
 } from "@/components/ui/alert-dialog";
 import { Button } from "../ui/button";
+import { useTranslations } from "next-intl";
 
 // 合并两个组件的所有 Props，并设为可选
 type UniversalConfirmDialogProps = {
@@ -55,6 +58,7 @@ type UniversalConfirmDialogProps = {
 };
 
 export function ConfirmDialog(props: UniversalConfirmDialogProps) {
+  const t = useTranslations("Common");
   const {
     // 通用
     title,
@@ -86,7 +90,9 @@ export function ConfirmDialog(props: UniversalConfirmDialogProps) {
       </AlertDialogHeader>
       {children}
       <AlertDialogFooter>
-        <AlertDialogCancel disabled={isLoading}>{cancelText}</AlertDialogCancel>
+        <AlertDialogCancel disabled={isLoading}>
+          {cancelText ?? t("cancel")}
+        </AlertDialogCancel>
         <Button
           variant={destructive ? "destructive" : "default"}
           onClick={onConfirm}
