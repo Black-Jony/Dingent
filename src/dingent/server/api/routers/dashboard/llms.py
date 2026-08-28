@@ -109,22 +109,19 @@ async def test_connection(
     try:
         start_time = time.time()
 
-        # 构造 LiteLLM 参数
-        # 注意：这里我们手动组装参数，因为 test_data 是 Pydantic 模型
-        model_name = test_data.model
-        if test_data.provider != "openai":
-            # LiteLLM 格式: provider/model_name
-            model_name = f"{test_data.provider}/{test_data.model}"
-
-        # 准备一次极简的调用
-        await litellm.acompletion(
-            model=model_name,
-            messages=[{"role": "user", "content": "Hello"}],
+        kwargs = LLMModelConfig.build_litellm_kwargs(
+            provider=test_data.provider,
+            model=test_data.model,
             api_key=test_data.api_key,
-            base_url=test_data.api_base,
+            api_base=test_data.api_base,
             api_version=test_data.api_version,
-            max_tokens=5,  # 只要能通就行，省钱
-            **test_data.parameters,
+            parameters=test_data.parameters,
+        )
+        kwargs["max_tokens"] = 5
+
+        await litellm.acompletion(
+            messages=[{"role": "user", "content": "Hello"}],
+            **kwargs,
         )
 
         duration = (time.time() - start_time) * 1000

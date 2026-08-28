@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { AssistantNodeType } from "../components/nodes/AssistantNode";
 import { Assistant } from "@/types/entity";
 import { v4 as uuidv4 } from "uuid";
+import { useTranslations } from "next-intl";
 
 // 这里定义你的 Node 数据类型
 
@@ -22,6 +23,7 @@ export function useFlowLogic(
   edges: Edge[],
   setEdges: React.Dispatch<React.SetStateAction<Edge[]>>,
 ) {
+  const t = useTranslations("Workflows");
   const { screenToFlowPosition } = useReactFlow();
 
   const onNodesChange = useCallback(
@@ -56,7 +58,7 @@ export function useFlowLogic(
         (n) => n.data.assistantId === assistant.id,
       );
       if (alreadyExists) {
-        toast.warning("This assistant is already in the workflow");
+        toast.warning(t("assistantAlreadyUsed"));
         return;
       }
 
@@ -78,7 +80,7 @@ export function useFlowLogic(
 
       setNodes((nds) => [...nds, newNode]);
     },
-    [nodes, setNodes, screenToFlowPosition],
+    [nodes, setNodes, screenToFlowPosition, t],
   );
 
   return { onNodesChange, onEdgesChange, onConnect, onDrop };

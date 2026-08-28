@@ -15,15 +15,17 @@ import { AnalyticsTab } from "@/features/dashboard/analytics-tab";
 import { DashboardStats } from "@/features/overview/components/dashboard-stats";
 import { OverviewMarketCard } from "@/features/overview/components/market-card";
 import { PageContainer } from "@/components/common/page-container";
+import { useTranslations } from "next-intl";
 
 export default function DashboardPage() {
+  const t = useTranslations("Overview");
   const { data, isLoading, error, refetch } = useOverviewQuery();
   const { api } = useWorkspaceApi();
 
   if (isLoading) {
     return (
       <>
-        <PageHeader heading="Dashboard" />
+        <PageHeader heading={t("pageHeading")} />
         <LoadingSkeleton lines={5} />
       </>
     );
@@ -32,7 +34,7 @@ export default function DashboardPage() {
   if (error || !data) {
     return (
       <>
-        <PageHeader heading="Dashboard" />
+        <PageHeader heading={t("pageHeading")} />
         <ErrorDisplay onRetry={() => refetch()} />
       </>
     );
@@ -40,11 +42,11 @@ export default function DashboardPage() {
 
   return (
     <PageContainer
-      title="Assistant Configuration"
-      description="Manage assistants, plugins, and tool configurations."
+      title={t("title")}
+      description={t("description")}
       action={
         <Button onClick={() => refetch()} variant="outline" size="sm">
-          Refresh
+          {t("refresh")}
         </Button>
       }
     >

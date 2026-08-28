@@ -384,6 +384,18 @@ class Resource(SQLModel, table=True):
 # --- 大模型 --
 
 
+OPENAI_COMPATIBLE_PROVIDERS = frozenset(
+    {
+        "deepseek",
+        "qwen",
+        "zhipu",
+        "moonshot",
+        "siliconflow",
+        "openai-compatible",
+    }
+)
+
+
 class LLMModelConfig(SQLModel, table=True):
     """
     统一的模型配置表。
@@ -420,18 +432,43 @@ class LLMModelConfig(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow, sa_column_kwargs={"onupdate": datetime.utcnow})
     workspace: Workspace = Relationship(back_populates="model_configs", sa_relationship_kwargs={"foreign_keys": "[LLMModelConfig.workspace_id]"})
 
-    def to_litellm_kwargs(self, decrypted_api_key: str | None) -> dict:
-        """
-        辅助方法：将数据库记录转换为 litellm.completion() 需要的参数字典
-        """
-        kwargs = {
-            "model": self.model if self.provider == "openai" else f"{self.provider}/{self.model}",
-            "api_key": decrypted_api_key,
-            "api_base": self.api_base,
-            **self.parameters,  # 展开存储的额外 JSON 参数
-        }
-        # 清理 None 值，避免覆盖 LiteLLM 默认值
-        return {k: v for k, v in kwargs.items() if v is not None}
+    @staticmethod
+    def build_litellm_kwargs(
+        *,
+        provider: str,
+        model: str,
+        api_key: str | None,
+        api_base: str | None = None,
+        api_version: str | None = None,
+        parameters: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Build one canonical set of LiteLLM arguments for saved and test calls."""
+        if provider in OPENAI_COMPATIBLE_PROVIDERS:
+            model_name = f"openai/{model}"
+        else:
+            model_name = model if provider == "openai" else f"{provider}/{model}"
+
+        kwargs: dict[str, Any] = dict(parameters or {})
+        kwargs.update(
+            {
+                "model": model_name,
+                "api_key": api_key,
+                "api_base": api_base,
+                "api_version": api_version,
+            }
+        )
+        return {key: value for key, value in kwargs.items() if value is not None}
+
+    def to_litellm_kwargs(self, decrypted_api_key: str | None) -> dict[str, Any]:
+        """Convert this saved configuration into canonical LiteLLM arguments."""
+        return self.build_litellm_kwargs(
+            provider=self.provider,
+            model=self.model,
+            api_key=decrypted_api_key,
+            api_base=self.api_base,
+            api_version=self.api_version,
+            parameters=self.parameters,
+        )
 
 
 class Conversation(SQLModel, table=True):

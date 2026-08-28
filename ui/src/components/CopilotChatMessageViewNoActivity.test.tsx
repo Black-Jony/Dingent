@@ -24,7 +24,10 @@ vi.mock("@copilotkit/react-core/v2", () => {
       ))}
     </div>
   );
-  CopilotChatMessageView.Cursor = () => null;
+  CopilotChatMessageView.displayName = "CopilotChatMessageView";
+  CopilotChatMessageView.Cursor = function CopilotChatCursor() {
+    return null;
+  };
   return {
     CopilotChatAssistantMessage: () => null,
     CopilotChatMessageView,

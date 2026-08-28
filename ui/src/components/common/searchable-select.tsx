@@ -1,4 +1,7 @@
+"use client";
+
 import * as React from "react";
+import { useTranslations } from "next-intl";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { twMerge } from "tailwind-merge";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -27,10 +30,13 @@ export function SearchableSelect({
   options,
   value,
   onChange,
-  placeholder = "Select...",
-  emptyText = "No results.",
+  placeholder,
+  emptyText,
   className,
 }: SearchableSelectProps) {
+  const t = useTranslations("Common");
+  const displayPlaceholder = placeholder ?? t("selectPlaceholder");
+  const displayEmptyText = emptyText ?? t("noResults");
   const [open, setOpen] = React.useState(false);
 
   // 2. Normalize options to a consistent format internally
@@ -46,7 +52,8 @@ export function SearchableSelect({
 
   // 3. Find the display label for the currently selected value
   const displayLabel =
-    normalizedOptions.find((opt) => opt.value === value)?.label || placeholder;
+    normalizedOptions.find((opt) => opt.value === value)?.label ||
+    displayPlaceholder;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -63,11 +70,11 @@ export function SearchableSelect({
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
         <Command>
-          <CommandInput placeholder="Search..." />
+          <CommandInput placeholder={t("search")} />
           <CommandList>
             {" "}
             {/* Use CommandList for scrolling long lists */}
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>{displayEmptyText}</CommandEmpty>
             <CommandGroup>
               {/* 4. Map over the normalized options */}
               {normalizedOptions.map((opt) => (

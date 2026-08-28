@@ -6,7 +6,7 @@ import {
   Workflow,
   Store,
   Construction,
-  Cpu
+  Cpu,
 } from "lucide-react";
 
 export const sidebarData: SidebarData = {
@@ -18,45 +18,45 @@ export const sidebarData: SidebarData = {
   teams: [],
   navGroups: [
     {
-      title: "General",
+      title: "general",
       items: [
         {
-          title: "Overview",
+          title: "overview",
           url: "/overview",
           icon: LayoutDashboard,
         },
         {
-          title: "Assistants",
+          title: "assistants",
           url: "/assistants",
           icon: Bot,
         },
         {
-          title: "Workflows",
+          title: "workflows",
           url: "/workflows",
           icon: Workflow,
         },
         {
-          title: "Plugins",
+          title: "plugins",
           url: "/plugins",
           icon: Store,
         },
         {
-          title: "Models",
+          title: "models",
           url: "/models",
           icon: Cpu,
         },
         {
-          title: "Market",
+          title: "market",
           url: "/market",
           icon: Store,
         },
         {
-          title: "Logs",
+          title: "logs",
           url: "/system-logs",
           icon: FileText,
         },
         {
-          title: "Chat Interface",
+          title: "chatInterface",
           url: "/chat",
           icon: Construction,
         },

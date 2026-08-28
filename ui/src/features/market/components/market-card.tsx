@@ -1,3 +1,6 @@
+"use client";
+
+import { useLocale, useTranslations } from "next-intl";
 import {
   Tag,
   Download,
@@ -26,13 +29,29 @@ interface MarketCardProps {
   isProcessing: boolean;
 }
 
-export function MarketCard({ item, onDownload, isProcessing }: MarketCardProps) {
+export function MarketCard({
+  item,
+  onDownload,
+  isProcessing,
+}: MarketCardProps) {
+  const t = useTranslations("Market");
+  const locale = useLocale();
+  const getCategoryLabel = (cat: string) => {
+    if (cat === "plugin") return t("plugins");
+    if (cat === "assistant") return t("assistants");
+    if (cat === "workflow") return t("workflows");
+    return t("uncategorized");
+  };
   const getCategoryColor = (cat: string) => {
     switch (cat) {
-      case "plugin": return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
-      case "assistant": return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
-      case "workflow": return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
-      default: return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
+      case "plugin":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300";
+      case "assistant":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300";
+      case "workflow":
+        return "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300";
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300";
     }
   };
 
@@ -56,7 +75,7 @@ export function MarketCard({ item, onDownload, isProcessing }: MarketCardProps) 
             )}
           </div>
           <Badge className={getCategoryColor(item.category)}>
-            {item.category ? item.category.charAt(0).toUpperCase() + item.category.slice(1) : "Uncategorized"}
+            {getCategoryLabel(item.category)}
           </Badge>
         </div>
         <CardDescription className="mt-2 line-clamp-2" title={item.description}>
@@ -97,7 +116,9 @@ export function MarketCard({ item, onDownload, isProcessing }: MarketCardProps) 
             <div className="flex items-center gap-2">
               <Calendar className="h-4 w-4" />
               <span>
-                Updated {new Date(item.updated_at).toLocaleDateString()}
+                {t("updated", {
+                  date: new Date(item.updated_at).toLocaleDateString(locale),
+                })}
               </span>
             </div>
           )}
@@ -105,7 +126,11 @@ export function MarketCard({ item, onDownload, isProcessing }: MarketCardProps) 
       </CardContent>
 
       <CardFooter>
-        <ActionButton item={item} isProcessing={isProcessing} onClick={() => onDownload(item)} />
+        <ActionButton
+          item={item}
+          isProcessing={isProcessing}
+          onClick={() => onDownload(item)}
+        />
       </CardFooter>
     </Card>
   );
@@ -115,12 +140,14 @@ export function MarketCard({ item, onDownload, isProcessing }: MarketCardProps) 
 function ActionButton({
   item,
   isProcessing,
-  onClick
+  onClick,
 }: {
   item: MarketItem;
   isProcessing: boolean;
-  onClick: () => void
+  onClick: () => void;
 }) {
+  const t = useTranslations("Market");
+
   if (item.update_available) {
     return (
       <Button
@@ -129,7 +156,7 @@ function ActionButton({
         className="w-full bg-yellow-500 text-black hover:bg-yellow-600"
       >
         <ArrowUpCircle className="mr-2 h-4 w-4" />
-        {isProcessing ? "Updating..." : "Update"}
+        {isProcessing ? t("updating") : t("update")}
       </Button>
     );
   }
@@ -137,14 +164,14 @@ function ActionButton({
     return (
       <Button disabled className="w-full" variant="secondary">
         <CheckCircle className="mr-2 h-4 w-4" />
-        Installed
+        {t("installed")}
       </Button>
     );
   }
   return (
     <Button onClick={onClick} disabled={isProcessing} className="w-full">
       <Download className="mr-2 h-4 w-4" />
-      {isProcessing ? "Downloading..." : "Download"}
+      {isProcessing ? t("downloading") : t("download")}
     </Button>
   );
 }

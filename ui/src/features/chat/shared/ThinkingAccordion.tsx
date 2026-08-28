@@ -1,3 +1,6 @@
+"use client";
+
+import { useTranslations } from "next-intl";
 import { BrainCircuit, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { twMerge } from "tailwind-merge";
@@ -14,8 +17,10 @@ export function ThinkingAccordion({
   isThinking = false,
   defaultExpanded = true,
   className,
-  label = "Thinking Process",
+  label,
 }: ThinkingAccordionProps) {
+  const t = useTranslations("Chat.thinking");
+  const displayLabel = label ?? t("process");
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Auto-scroll logic when content updates and is thinking
@@ -40,7 +45,7 @@ export function ThinkingAccordion({
         )}
       >
         <Loader2 className="w-4 h-4 animate-spin" />
-        <span>Thinking...</span>
+        <span>{t("thinking")}</span>
       </div>
     );
   }
@@ -61,7 +66,7 @@ export function ThinkingAccordion({
           ) : (
             <BrainCircuit className="w-4 h-4" />
           )}
-          <span>{label}</span>
+          <span>{displayLabel}</span>
           {isExpanded ? (
             <ChevronDown className="w-3 h-3 ml-auto opacity-70" />
           ) : (

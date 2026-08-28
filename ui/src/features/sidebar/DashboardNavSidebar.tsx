@@ -18,6 +18,7 @@ import {
   SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { Workspace } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
 interface DashboardNavSidebarProps {
   workspaces: Workspace[];
@@ -31,6 +32,7 @@ export function DashboardNavSidebar({
   isGuest = false,
 }: DashboardNavSidebarProps) {
   const pathname = usePathname();
+  const t = useTranslations("Navigation");
 
   const dynamicNavGroups = sidebarData.navGroups.map((group) => ({
     ...group,
@@ -49,7 +51,7 @@ export function DashboardNavSidebar({
             {/* 统一使用 GroupLabel 样式 */}
             {group.title && (
               <SidebarGroupLabel className="px-2 text-xs font-medium text-muted-foreground/50 uppercase tracking-wider">
-                {group.title}
+                {t(`groups.${group.title}`)}
               </SidebarGroupLabel>
             )}
             <SidebarGroupContent>
@@ -60,18 +62,19 @@ export function DashboardNavSidebar({
                     pathname === item.url ||
                     pathname.startsWith(`${item.url}/`);
                   const Icon = item.icon; // 假设 sidebarData 里存的是 Icon 组件
+                  const itemTitle = t(`items.${item.title}`);
 
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
                         asChild
                         isActive={isActive}
-                        tooltip={item.title}
+                        tooltip={itemTitle}
                         className="h-9 transition-colors"
                       >
                         <Link href={item.url}>
                           {Icon && <Icon className="mr-2 size-4" />}
-                          <span className="truncate">{item.title}</span>
+                          <span className="truncate">{itemTitle}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
@@ -91,7 +94,7 @@ export function DashboardNavSidebar({
             <SidebarMenuButton asChild>
               <Link href={`/${currentSlug}/chat`}>
                 <Settings className="size-4" />
-                <span>Go To Chat</span>
+                <span>{t("goToChat")}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>

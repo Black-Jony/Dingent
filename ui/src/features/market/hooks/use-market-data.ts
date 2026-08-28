@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { getClientApi } from "@/lib/api/client";
 import { getErrorMessage } from "@/lib/utils";
 import { MarketFilters } from "./use-market-filters";
+import { useTranslations } from "next-intl";
 
 // 统一管理 Query Keys
 export const marketKeys = {
@@ -56,6 +57,7 @@ export function useMarketItems(workspaceSlug: string, filters: MarketFilters) {
 }
 
 export function useMarketDownload(workspaceSlug: string) {
+  const t = useTranslations("Market");
   const qc = useQueryClient();
   const api = useMemo(
     () => getClientApi().forWorkspace(workspaceSlug),
@@ -65,12 +67,15 @@ export function useMarketDownload(workspaceSlug: string) {
   return useMutation({
     mutationFn: (variables: any) => api.market.download(variables),
     onSuccess: (_data, variables) => {
-      const action = variables.isUpdate ? "updated" : "downloaded";
-      toast.success(`Successfully ${action} ${variables.category}`);
+      toast.success(
+        t(variables.isUpdate ? "updatedSuccess" : "downloadedSuccess", {
+          category: variables.category,
+        }),
+      );
 
       qc.invalidateQueries({ queryKey: marketKeys.all });
       qc.invalidateQueries({ queryKey: marketKeys.metadata });
     },
-    onError: (e) => toast.error(getErrorMessage(e, "Operation failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("operationFailed"))),
   });
 }

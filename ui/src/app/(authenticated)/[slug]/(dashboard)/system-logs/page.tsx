@@ -1,5 +1,6 @@
 "use client";
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -20,6 +21,8 @@ const levelColors: Record<string, string> = {
 const LEVELS = ["All", "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
 
 export default function LogsPage() {
+  const t = useTranslations("SystemLogs");
+  const common = useTranslations("Common");
   const qc = useQueryClient();
   const [autoRefresh, setAutoRefresh] = useState(false);
   const params = useParams();
@@ -55,27 +58,29 @@ export default function LogsPage() {
   const byLevelEntries = useMemo(() => {
     const logs = statsQ.data || [];
 
-    const counts = logs.reduce((acc, log) => {
-      const lvl = log.level || "Unknown";
+    const counts = logs.reduce(
+      (acc, log) => {
+        const lvl = log.level || "Unknown";
 
-      acc[lvl] = (acc[lvl] || 0) + 1;
+        acc[lvl] = (acc[lvl] || 0) + 1;
 
-      return acc;
-    }, {} as Record<string, number>);
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return Object.entries(counts);
   }, [statsQ.data]);
 
   return (
     <>
-
       <FloatingActionButton>
         <Button
           variant={autoRefresh ? "default" : "outline"}
           onClick={() => setAutoRefresh((v) => !v)}
           className="w-40 justify-center shadow-lg"
         >
-          {autoRefresh ? "Auto Refresh: ON" : "Auto Refresh: OFF"}
+          {autoRefresh ? t("autoOn") : t("autoOff")}
         </Button>
         <Button
           onClick={async () => {
@@ -84,34 +89,32 @@ export default function LogsPage() {
           }}
           className="shadow-lg"
         >
-          Refresh
+          {common("refresh")}
         </Button>
         <Button
           variant="destructive"
           onClick={async () => {
             const ok = await wsApi.logs.clear();
             if (ok) {
-              toast.success("All logs cleared");
+              toast.success(t("clearSuccess"));
               await qc.invalidateQueries({ queryKey: ["logs"] });
               await qc.invalidateQueries({ queryKey: ["log-stats"] });
             } else {
-              toast.error("Failed to clear logs");
+              toast.error(t("clearFailed"));
             }
           }}
           className="shadow-lg"
         >
-          Clear All
+          {t("clearAll")}
         </Button>
       </FloatingActionButton>
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">System Logs</h1>
-        <p className="text-muted-foreground">
-          Inspect logs and filter by level, module, or keywords.
-        </p>
+        <h1 className="text-2xl font-bold tracking-tight">{t("title")}</h1>
+        <p className="text-muted-foreground">{t("description")}</p>
       </div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-[2fr_1fr]">
         <div className="rounded border p-3">
-          <div className="mb-2 font-medium">Log Statistics</div>
+          <div className="mb-2 font-medium">{t("statistics")}</div>
           {total > 0 ? (
             <>
               <div className="text-3xl font-bold">{total}</div>
@@ -133,14 +136,12 @@ export default function LogsPage() {
               )}
             </>
           ) : (
-            <div className="text-muted-foreground text-sm">
-              No logs available
-            </div>
+            <div className="text-muted-foreground text-sm">{t("noLogs")}</div>
           )}
         </div>
 
         <div className="rounded border p-3">
-          <div className="mb-2 font-medium">Filter</div>
+          <div className="mb-2 font-medium">{t("filter")}</div>
           <div className="grid grid-cols-1 gap-2">
             <div className="flex flex-wrap gap-2">
               {LEVELS.map((l) => (
@@ -149,17 +150,17 @@ export default function LogsPage() {
                   className={`rounded-full border px-3 py-1 text-sm ${l === level ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
                   onClick={() => setLevel(l)}
                 >
-                  {l}
+                  {l === "All" ? t("all") : l}
                 </button>
               ))}
             </div>
             <Input
-              placeholder="Module (e.g., config_manager)"
+              placeholder={t("modulePlaceholder")}
               value={module}
               onChange={(e) => setModule(e.target.value)}
             />
             <Input
-              placeholder="Search in message..."
+              placeholder={t("searchPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -176,13 +177,11 @@ export default function LogsPage() {
       </div>
 
       <div className="space-y-2">
-        {logsQ.isLoading && <div>Loading logs...</div>}
-        {logsQ.error && (
-          <div className="text-red-600">Failed to load logs</div>
-        )}
+        {logsQ.isLoading && <div>{t("loading")}</div>}
+        {logsQ.error && <div className="text-red-600">{t("loadFailed")}</div>}
         {logsQ.data && logsQ.data.length > 0 && (
           <div className="text-sm font-medium">
-            Showing {logsQ.data.length} logs
+            {t("showing", { count: logsQ.data.length })}
           </div>
         )}
         {logsQ.data?.map((log, idx) => {
@@ -203,32 +202,32 @@ export default function LogsPage() {
               </summary>
               <div className="mt-2 space-y-1">
                 <div>
-                  <span className="font-semibold">Level:</span>{" "}
+                  <span className="font-semibold">{t("level")}</span>{" "}
                   <span style={{ color }}>{log.level}</span>
                 </div>
                 <div>
-                  <span className="font-semibold">Timestamp:</span>{" "}
+                  <span className="font-semibold">{t("timestamp")}</span>{" "}
                   {log.timestamp}
                 </div>
                 <div>
-                  <span className="font-semibold">Module:</span>{" "}
+                  <span className="font-semibold">{t("module")}</span>{" "}
                   <code>{log.module}</code>
                 </div>
                 <div>
-                  <span className="font-semibold">Function:</span>{" "}
+                  <span className="font-semibold">{t("function")}</span>{" "}
                   <code>{log.function}</code>
                 </div>
                 <div className="flex items-center justify-between">
-                  <div className="font-semibold">Message:</div>
+                  <div className="font-semibold">{t("message")}</div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => {
                       navigator.clipboard.writeText(log.message || "");
-                      toast.success("Message copied");
+                      toast.success(t("copied"));
                     }}
                   >
-                    Copy
+                    {common("copy")}
                   </Button>
                 </div>
                 <pre className="bg-muted rounded p-2 text-sm whitespace-pre-wrap">
@@ -236,7 +235,7 @@ export default function LogsPage() {
                 </pre>
                 {log.context && Object.keys(log.context).length > 0 && (
                   <>
-                    <div className="font-semibold">Context:</div>
+                    <div className="font-semibold">{t("context")}</div>
                     <pre className="bg-muted rounded p-2 text-sm whitespace-pre-wrap">
                       {JSON.stringify(log.context, null, 2)}
                     </pre>
@@ -244,7 +243,7 @@ export default function LogsPage() {
                 )}
                 {log.correlation_id && (
                   <div>
-                    <span className="font-semibold">Correlation ID:</span>{" "}
+                    <span className="font-semibold">{t("correlationId")}</span>{" "}
                     <code>{log.correlation_id}</code>
                   </div>
                 )}
@@ -253,9 +252,7 @@ export default function LogsPage() {
           );
         })}
         {logsQ.data && logsQ.data.length === 0 && (
-          <div className="text-muted-foreground text-sm">
-            No logs match the current filters.
-          </div>
+          <div className="text-muted-foreground text-sm">{t("noMatches")}</div>
         )}
       </div>
     </>

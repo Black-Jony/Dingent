@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityMessage } from "@ag-ui/core";
 import { twMerge } from "tailwind-merge";
 import { useRenderActivityMessage } from "@copilotkit/react-core/v2";
+import { useTranslations } from "next-intl";
 
 /**
  * 内部使用的 Memoized 组件
@@ -81,6 +82,7 @@ export function CopilotChatActivityList({
   className,
   ...props
 }: CopilotChatActivityListProps) {
+  const t = useTranslations("Renderer");
   // 获取渲染逻辑的 Hook
   const activityMessageRenderer = useRenderActivityMessage();
   const renderActivityMessage =
@@ -184,9 +186,9 @@ export function CopilotChatActivityList({
                 }))
               }
             >
-              <span>{`Species (${speciesName})`}</span>
+              <span>{`${t("species")} (${speciesName})`}</span>
               <span className="text-xs text-zinc-500">
-                {isCollapsed ? "Expand" : "Collapse"}
+                {isCollapsed ? t("expand") : t("collapse")}
               </span>
             </button>
             {!isCollapsed && (

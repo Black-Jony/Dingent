@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   BadgeCheck,
@@ -9,8 +11,22 @@ import {
 import { useDialogState } from "@/hooks/use-dialog-state";
 import { SignOutDialog } from "../common/sign-out-dialog";
 import { AvatarImage, AvatarFallback, Avatar } from "../ui/avatar";
-import { DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuGroup, DropdownMenuItem, DropdownMenu } from "../ui/dropdown-menu";
-import { useSidebar, SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "../ui/sidebar";
+import {
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenu,
+} from "../ui/dropdown-menu";
+import {
+  useSidebar,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from "../ui/sidebar";
+import { useTranslations } from "next-intl";
 
 type NavUserProps = {
   user: {
@@ -21,6 +37,7 @@ type NavUserProps = {
 };
 
 export function NavUser({ user }: NavUserProps) {
+  const t = useTranslations("Profile");
   const { isMobile } = useSidebar();
   const [open, setOpen] = useDialogState();
 
@@ -88,7 +105,7 @@ export function NavUser({ user }: NavUserProps) {
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setOpen(true)}>
                 <LogOut />
-                Sign out
+                {t("signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

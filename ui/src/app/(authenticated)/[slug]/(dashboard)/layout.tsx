@@ -6,8 +6,8 @@ import { ConfigDrawer } from "@/components/common/config-drawer";
 import { Search } from "@/components/common/search";
 import { ThemeSwitch } from "@/components/common/theme-switch";
 import { ProfileDropdown } from "@/components/common/profile-dropdown";
+import { LanguageSwitch } from "@/components/common/language-switch";
 import { Main } from "@/components/layout/main";
-
 
 export default async function DashboardAppLayout({
   children,
@@ -18,10 +18,7 @@ export default async function DashboardAppLayout({
 }) {
   const [api, { slug }] = await Promise.all([getServerApi(), params]);
 
-  const [workspace] = await Promise.all([
-    api.workspaces.list(),
-    api.workspaces.getBySlug(slug).catch(() => null),
-  ]);
+  const workspace = await api.workspaces.getBySlug(slug).catch(() => null);
 
   if (!workspace) {
     return notFound();
@@ -32,14 +29,13 @@ export default async function DashboardAppLayout({
       <Header>
         <Search />
         <div className="ms-auto flex items-center gap-4">
+          <LanguageSwitch />
           <ThemeSwitch />
           <ConfigDrawer />
           <ProfileDropdown />
         </div>
       </Header>
-      <Main>
-        {children}
-      </Main>
+      <Main>{children}</Main>
     </>
   );
 }

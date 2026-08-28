@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { ChevronDown, Workflow, Check, Bot, Loader2 } from "lucide-react";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { WorkflowSummary } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
 interface WorkflowSelectorProps {
   workflows: WorkflowSummary[];
@@ -16,6 +17,7 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
   setActiveId,
   isLoading,
 }) => {
+  const t = useTranslations("Chat");
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -38,16 +40,20 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
         disabled={isLoading || workflows.length === 0}
         className={`
           group flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all duration-200
-          ${isOpen
-            ? "bg-neutral-800 border-neutral-700 text-neutral-200"
-            : "bg-neutral-900/50 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"}
+          ${
+            isOpen
+              ? "bg-neutral-800 border-neutral-700 text-neutral-200"
+              : "bg-neutral-900/50 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
+          }
         `}
       >
         {/* 图标容器 */}
-        <div className={`
+        <div
+          className={`
           flex items-center justify-center w-6 h-6 rounded-full transition-colors
           ${isOpen ? "bg-indigo-500/20 text-indigo-400" : "bg-neutral-800 text-neutral-500 group-hover:text-neutral-300"}
-        `}>
+        `}
+        >
           {isLoading ? (
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
           ) : (
@@ -58,14 +64,14 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
         {/* 文本区域 */}
         <div className="flex flex-col items-start text-left mr-1">
           <span className="text-[10px] uppercase font-bold text-neutral-600 leading-none mb-0.5 group-hover:text-neutral-500 transition-colors">
-            Agent
+            {t("workflow.agent")}
           </span>
           <span className="text-xs font-medium truncate max-w-[120px] sm:max-w-[160px] leading-none">
             {isLoading
-              ? "Loading..."
+              ? t("workflow.loading")
               : workflows.length === 0
-                ? "No workflows"
-                : activeWorkflow?.name || "Select Workflow"}
+                ? t("workflow.none")
+                : activeWorkflow?.name || t("workflow.select")}
           </span>
         </div>
 
@@ -90,20 +96,26 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
                     onClick={() => handleSelect(w.id)}
                     className={`
                       w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all
-                      ${isActive
-                        ? "bg-neutral-800 text-white font-medium shadow-sm"
-                        : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"}
+                      ${
+                        isActive
+                          ? "bg-neutral-800 text-white font-medium shadow-sm"
+                          : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"
+                      }
                     `}
                   >
-                    <Workflow className={`w-4 h-4 ${isActive ? "text-indigo-400" : "opacity-40"}`} />
+                    <Workflow
+                      className={`w-4 h-4 ${isActive ? "text-indigo-400" : "opacity-40"}`}
+                    />
                     <span className="flex-1 truncate">{w.name}</span>
-                    {isActive && <Check className="w-3.5 h-3.5 text-indigo-400" />}
+                    {isActive && (
+                      <Check className="w-3.5 h-3.5 text-indigo-400" />
+                    )}
                   </button>
                 );
               })}
               {workflows.length === 0 && (
                 <div className="px-4 py-3 text-xs text-neutral-500 text-center">
-                  No workflows available
+                  {t("workflow.noneAvailable")}
                 </div>
               )}
             </div>

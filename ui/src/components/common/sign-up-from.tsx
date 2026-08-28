@@ -1,98 +1,102 @@
-import { useState } from 'react'
-import { useRouter } from "next/navigation"
-import { z } from 'zod'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { z } from "zod";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { cn } from "@/lib/utils";
-import { toast } from 'sonner'
-import { IconGithub, IconFacebook } from '@/assets/icon'
-import { FormField, FormItem, FormLabel, FormControl, FormMessage, Form } from '../ui/form'
-import { PasswordInput } from './password-input'
-import { Input } from '../ui/input'
-import { Button } from '../ui/button'
+import { toast } from "sonner";
+import { IconGithub, IconFacebook } from "@/assets/icon";
+import {
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  Form,
+} from "../ui/form";
+import { PasswordInput } from "./password-input";
+import { Input } from "../ui/input";
+import { Button } from "../ui/button";
+import { useTranslations } from "next-intl";
 interface SignUpFormProps extends React.HTMLAttributes<HTMLFormElement> {
   // 定义接口
   api: {
     auth: {
       signup: (data: any) => Promise<any>;
-    }
-  }
+    };
+  };
 }
 
-const formSchema = z
-  .object({
-    email: z.email({
-      error: (iss) =>
-        iss.input === '' ? 'Please enter your email' : undefined,
-    }),
-    password: z
-      .string()
-      .min(1, 'Please enter your password')
-      .min(7, 'Password must be at least 7 characters long'),
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match.",
-    path: ['confirmPassword'],
-  })
-
-export function SignUpForm({
-  className,
-  api,
-  ...props
-}: SignUpFormProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const router = useRouter()
+export function SignUpForm({ className, api, ...props }: SignUpFormProps) {
+  const t = useTranslations("Auth");
+  const formSchema = z
+    .object({
+      email: z.email({
+        error: (issue) =>
+          issue.input === "" ? t("validation.emailRequired") : undefined,
+      }),
+      password: z
+        .string()
+        .min(1, t("validation.passwordRequired"))
+        .min(7, t("validation.passwordLength")),
+      confirmPassword: z
+        .string()
+        .min(1, t("validation.confirmPasswordRequired")),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t("validation.passwordMismatch"),
+      path: ["confirmPassword"],
+    });
+  const [isLoading, setIsLoading] = useState(false);
+  const router = useRouter();
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      email: '',
-      password: '',
-      confirmPassword: '',
+      email: "",
+      password: "",
+      confirmPassword: "",
     },
-  })
+  });
 
   function onSubmit(data: z.infer<typeof formSchema>) {
-    setIsLoading(true)
+    setIsLoading(true);
     const signUpPromise = api.auth.signup({
       username: "NewUser",
       email: data.email,
       password: data.password,
     });
     toast.promise(signUpPromise, {
-      loading: "正在注册...",
+      loading: t("toast.signingUp"),
       success: () => {
-
         setIsLoading(false);
         router.push("/auth/login");
 
-        return `注册成功`;
+        return t("toast.signUpSuccess");
       },
       error: (err) => {
         setIsLoading(false);
 
-        return err.message || "发生未知错误";
+        return err.message || t("toast.signUpFailed");
       },
     });
-
   }
 
   return (
     <Form {...form}>
       <form
         onSubmit={form.handleSubmit(onSubmit)}
-        className={cn('grid gap-3', className)}
+        className={cn("grid gap-3", className)}
         {...props}
       >
         <FormField
           control={form.control}
-          name='email'
+          name="email"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Email</FormLabel>
+              <FormLabel>{t("email")}</FormLabel>
               <FormControl>
-                <Input placeholder='name@example.com' {...field} />
+                <Input placeholder="name@example.com" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -100,12 +104,12 @@ export function SignUpForm({
         />
         <FormField
           control={form.control}
-          name='password'
+          name="password"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Password</FormLabel>
+              <FormLabel>{t("password")}</FormLabel>
               <FormControl>
-                <PasswordInput placeholder='********' {...field} />
+                <PasswordInput placeholder="********" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -113,51 +117,51 @@ export function SignUpForm({
         />
         <FormField
           control={form.control}
-          name='confirmPassword'
+          name="confirmPassword"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Confirm Password</FormLabel>
+              <FormLabel>{t("confirmPassword")}</FormLabel>
               <FormControl>
-                <PasswordInput placeholder='********' {...field} />
+                <PasswordInput placeholder="********" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <Button className='mt-2' disabled={isLoading}>
-          Create Account
+        <Button className="mt-2" disabled={isLoading}>
+          {t("createAccountButton")}
         </Button>
 
-        <div className='relative my-2'>
-          <div className='absolute inset-0 flex items-center'>
-            <span className='w-full border-t' />
+        <div className="relative my-2">
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
           </div>
-          <div className='relative flex justify-center text-xs uppercase'>
-            <span className='bg-background text-muted-foreground px-2'>
-              Or continue with
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-background text-muted-foreground px-2">
+              {t("orContinueWith")}
             </span>
           </div>
         </div>
 
-        <div className='grid grid-cols-2 gap-2'>
+        <div className="grid grid-cols-2 gap-2">
           <Button
-            variant='outline'
-            className='w-full'
-            type='button'
+            variant="outline"
+            className="w-full"
+            type="button"
             disabled={isLoading}
           >
-            <IconGithub className='h-4 w-4' /> GitHub
+            <IconGithub className="h-4 w-4" /> GitHub
           </Button>
           <Button
-            variant='outline'
-            className='w-full'
-            type='button'
+            variant="outline"
+            className="w-full"
+            type="button"
             disabled={isLoading}
           >
-            <IconFacebook className='h-4 w-4' /> Facebook
+            <IconFacebook className="h-4 w-4" /> Facebook
           </Button>
         </div>
       </form>
     </Form>
-  )
+  );
 }

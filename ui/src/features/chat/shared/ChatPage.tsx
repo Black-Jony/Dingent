@@ -40,6 +40,7 @@ import { getClientApi } from "@/lib/api/client";
 import { ThinkingProvider, useThinking } from "@/providers/ThinkingProvider";
 import { TodoListView } from "@/components/common/todo-list-view";
 import { ThinkingAccordion } from "./ThinkingAccordion";
+import { useTranslations } from "next-intl";
 
 interface ChatPageProps {
   isGuest?: boolean;
@@ -96,6 +97,7 @@ function shouldThrowOnActivitySnapshot() {
 }
 
 function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
+  const t = useTranslations("Chat");
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -109,6 +111,28 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
   const { workflow } = useActiveWorkflow(api.workflows, slug);
 
   const { activeThreadId, updateThreadTitle } = useThreadContext();
+  const copilotLabels = {
+    chatInputPlaceholder: t("copilot.placeholder"),
+    chatInputToolbarStartTranscribeButtonLabel: t("copilot.transcribe"),
+    chatInputToolbarCancelTranscribeButtonLabel: t("copilot.cancel"),
+    chatInputToolbarFinishTranscribeButtonLabel: t("copilot.finish"),
+    chatInputToolbarAddButtonLabel: t("copilot.addAttachments"),
+    chatInputToolbarToolsButtonLabel: t("copilot.tools"),
+    assistantMessageToolbarCopyCodeLabel: t("copilot.copy"),
+    assistantMessageToolbarCopyCodeCopiedLabel: t("copilot.copied"),
+    assistantMessageToolbarCopyMessageLabel: t("copilot.copy"),
+    assistantMessageToolbarThumbsUpLabel: t("copilot.goodResponse"),
+    assistantMessageToolbarThumbsDownLabel: t("copilot.badResponse"),
+    assistantMessageToolbarReadAloudLabel: t("copilot.readAloud"),
+    assistantMessageToolbarRegenerateLabel: t("copilot.regenerate"),
+    userMessageToolbarCopyMessageLabel: t("copilot.copy"),
+    userMessageToolbarEditMessageLabel: t("copilot.edit"),
+    chatDisclaimerText: t("copilot.disclaimer"),
+    chatToggleOpenLabel: t("copilot.open"),
+    chatToggleCloseLabel: t("copilot.close"),
+    modalHeaderTitle: t("copilot.title"),
+    welcomeMessageText: t("copilot.welcome"),
+  };
 
   const agentName = workflow?.name || "default";
   const agent = useAgent({ agentId: agentName });
@@ -178,13 +202,13 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
           ? lastTodo.content.length > 15
             ? lastTodo.content.slice(0, 15) + "..."
             : lastTodo.content
-          : "Initializing...";
+          : t("thinking.initializing");
 
         if (status === "complete") {
           return (
             <div className="flex items-center gap-1.5 text-xs text-zinc-500 bg-transparent border-none p-0 mt-1">
               <Check className="w-3 h-3 text-green-500/70" />
-              <span>Plan updated.</span>
+              <span>{t("thinking.planUpdated")}</span>
             </div>
           );
         }
@@ -194,14 +218,14 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
             <Loader2 className="w-3 h-3 animate-spin text-zinc-600" />
             <span className="opacity-80">
               {todos.length > 0
-                ? `Step ${todos.length}: ${content}`
-                : "Thinking..."}
+                ? t("thinking.step", { number: todos.length, content })
+                : t("thinking.thinking")}
             </span>
           </div>
         );
       },
     },
-    [activeThreadId],
+    [activeThreadId, t],
   );
   useEffect(() => {
     setTodos(null);
@@ -509,7 +533,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
           <ThinkingAccordion
             content={thinkingText}
             isThinking={isThinking}
-            label="Thinking Process..."
+            label={t("thinking.process")}
           />
         )}
         {todos && <TodoListView key={activeThreadId} data={todos} />}
@@ -519,6 +543,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
         agentId={workflow?.name}
         threadId={activeThreadId}
         attachments={CHAT_IMAGE_ATTACHMENTS}
+        labels={copilotLabels}
         messageView={messageView}
         header={ChatHeader as any}
       />

@@ -3,10 +3,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "bun run i18n:check && next build",
     "start": "next start",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "i18n:sync": "node scripts/i18n.mjs sync",
+    "i18n:check": "node scripts/i18n.mjs check",
     "lint": "eslint",
     "lint:fix": "eslint --fix"
   },
@@ -20,6 +22,8 @@
     "@types/react-dom": "19.2.3",
     "@types/uuid": "^11.0.0",
     "barrelsby": "^2.8.1",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.1.0",
     "fastbench": "^1.0.1",
     "jsdom": "^29.1.1",
     "pino-elasticsearch": "^8.1.0",
@@ -70,6 +74,7 @@
     "js-cookie": "^3.0.5",
     "lucide-react": "^0.562.0",
     "next": "^16.1.0",
+    "next-intl": "^4.13.7",
     "postcss": "^8.5.6",
     "radix-ui": "^1.4.3",
     "react": "^19.2.3",
@@ -88,5 +93,8 @@
     "uuid": "^13.0.0",
     "zod": "^4.0.0",
     "zustand": "^5.0.9"
+  },
+  "patchedDependencies": {
+    "@copilotkit/react-core@1.57.1": "patches/@copilotkit%2Freact-core@1.57.1.patch"
   }
 }

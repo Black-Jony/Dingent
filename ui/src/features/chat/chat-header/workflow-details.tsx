@@ -1,7 +1,13 @@
+"use client";
+
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Info } from "lucide-react";
 
-export const WorkflowDetails: React.FC<{ description?: string }> = ({ description }) => {
+export const WorkflowDetails: React.FC<{ description?: string }> = ({
+  description,
+}) => {
+  const t = useTranslations("Chat.workflow");
   const [isOpen, setIsOpen] = useState(false);
 
   if (!description) return null;
@@ -17,7 +23,9 @@ export const WorkflowDetails: React.FC<{ description?: string }> = ({ descriptio
       >
         <div className="min-h-0">
           <div className="p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5 text-xs text-indigo-200/80 leading-relaxed shadow-inner">
-            <span className="text-indigo-400 font-semibold mr-1">About this agent:</span>
+            <span className="text-indigo-400 font-semibold mr-1">
+              {t("about")}
+            </span>
             {description}
           </div>
         </div>
@@ -29,13 +37,15 @@ export const WorkflowDetails: React.FC<{ description?: string }> = ({ descriptio
           onClick={() => setIsOpen(!isOpen)}
           className={`
             flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors px-2 py-0.5 rounded-md
-            ${isOpen
-              ? "text-indigo-400 bg-indigo-500/10"
-              : "text-neutral-600 hover:text-neutral-400 hover:bg-neutral-800/50"}
+            ${
+              isOpen
+                ? "text-indigo-400 bg-indigo-500/10"
+                : "text-neutral-600 hover:text-neutral-400 hover:bg-neutral-800/50"
+            }
           `}
         >
           <Info className="w-3 h-3" />
-          {isOpen ? "Hide Info" : "Info"}
+          {isOpen ? t("hide") : t("info")}
         </button>
       </div>
     </div>

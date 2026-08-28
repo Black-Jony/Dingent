@@ -28,6 +28,7 @@ import { CreateWorkspaceDialog } from "../common/create-workspace-dialog";
 import { SettingsDialog } from "./settings-dialog";
 import { Workspace } from "@/types/entity";
 import { useWorkspaceApi } from "@/hooks/use-workspace-api";
+import { useTranslations } from "next-intl";
 
 // 定义 User 类型
 type UserData = {
@@ -45,11 +46,12 @@ export function WorkspaceSwitcher({
   workspaces,
   user,
 }: WorkspaceSwitcherProps) {
+  const t = useTranslations("Workspace");
   const { workspacesApi } = useWorkspaceApi();
   const params = useParams();
   const slug = params.slug as string;
   const activeWorkspace = workspaces.find((w) => w.slug === slug);
-  const activeName = activeWorkspace?.name || slug || "Select Workspace";
+  const activeName = activeWorkspace?.name || slug || t("select");
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
   const [settingsDefaultTab, setSettingsDefaultTab] = React.useState("general");
   const openSettings = (tab = "general") => {
@@ -57,7 +59,7 @@ export function WorkspaceSwitcher({
     setIsSettingsOpen(true);
   };
 
-  const workspaceMeta = "测试版 · 1 位成员";
+  const workspaceMeta = t("betaMembers", { count: 1 });
 
   const { isMobile } = useSidebar();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
@@ -136,7 +138,7 @@ export function WorkspaceSwitcher({
                   onClick={() => openSettings("general")}
                 >
                   <Settings className="mr-2 size-4" />
-                  设置
+                  {t("settings")}
                 </Button>
                 <Button
                   variant="outline"
@@ -145,7 +147,7 @@ export function WorkspaceSwitcher({
                   onClick={() => openSettings("people")}
                 >
                   <UserPlus className="mr-2 size-4" />
-                  邀请成员
+                  {t("inviteMembers")}
                 </Button>
               </div>
             </div>
@@ -192,7 +194,7 @@ export function WorkspaceSwitcher({
               <div className="flex size-6 items-center justify-center">
                 <Plus className="size-4" />
               </div>
-              <div className="font-medium text-sm">新建工作区</div>
+              <div className="font-medium text-sm">{t("create")}</div>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator />
@@ -206,7 +208,7 @@ export function WorkspaceSwitcher({
               <div className="flex size-6 items-center justify-center">
                 <LogOut className="size-4" />
               </div>
-              <span>登出</span>
+              <span>{t("signOut")}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

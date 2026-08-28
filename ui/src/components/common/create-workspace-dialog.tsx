@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useTranslations } from "next-intl";
 import {
   Dialog,
   DialogContent,
@@ -27,17 +28,7 @@ import { Input } from "../ui/input";
 import { Button } from "../ui/button";
 import { WorkspaceApi } from "@/services/workspace";
 
-const formSchema = z.object({
-  name: z.string().min(1, "工作空间名称不能为空").max(50, "名称太长了"),
-  slug: z
-    .string()
-    .min(3, "标识符至少需要3个字符")
-    .max(30, "标识符太长了")
-    .regex(/^[a-z0-9-]+$/, "只能包含小写字母、数字和连字符 (例如: my-team)"),
-});
-
-// 2. 定义 API 请求的数据类型 (通常可以从 zod schema 推导)
-type CreateWorkspaceValues = z.infer<typeof formSchema>;
+type CreateWorkspaceValues = { name: string; slug: string };
 
 interface CreateWorkspaceDialogProps {
   api: WorkspaceApi;
@@ -50,52 +41,49 @@ export function CreateWorkspaceDialog({
   open,
   onOpenChange,
 }: CreateWorkspaceDialogProps) {
+  const t = useTranslations("Workspace");
+  const common = useTranslations("Common");
   const [isLoading, setIsLoading] = useState(false);
-
-  // 3. 初始化表单
+  const formSchema = useMemo(
+    () =>
+      z.object({
+        name: z
+          .string()
+          .min(1, t("validation.nameRequired"))
+          .max(50, t("validation.nameTooLong")),
+        slug: z
+          .string()
+          .min(3, t("validation.slugMin"))
+          .max(30, t("validation.slugMax"))
+          .regex(/^[a-z0-9-]+$/, t("validation.slugPattern")),
+      }),
+    [t],
+  );
   const form = useForm<CreateWorkspaceValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: "",
-      slug: "",
-    },
+    defaultValues: { name: "", slug: "" },
   });
 
-  // UX 优化：当弹窗关闭时，重置表单
   useEffect(() => {
-    if (!open) {
-      form.reset();
-    }
+    if (!open) form.reset();
   }, [open, form]);
 
-  // 4. 提交处理
   async function onSubmit(data: CreateWorkspaceValues) {
     setIsLoading(true);
-
-    // 构造 Promise 用于 toast.promise
-    const createPromise = async () => {
-      // 调用 API (假设这是你的 API 签名)
-      const newWorkspace = await api.create({
-        name: data.name,
-        slug: data.slug,
-      });
-
-      return newWorkspace;
-    };
-
-    toast.promise(createPromise(), {
-      loading: "正在创建工作空间...",
-      success: (data) => {
+    const createPromise = api.create({ name: data.name, slug: data.slug });
+    toast.promise(createPromise, {
+      loading: t("toast.creating"),
+      success: (workspace) => {
         setIsLoading(false);
-        onOpenChange(false); // 关闭弹窗
-        return `工作空间 "${data.name}" 创建成功!`;
+        onOpenChange(false);
+        return t("toast.created", { name: workspace.name });
       },
-      error: (err) => {
+      error: (error) => {
         setIsLoading(false);
-        if (err.message?.includes("slug")) {
-          form.setError("slug", { message: "该标识符已被占用" });
+        if (error.message?.includes("slug")) {
+          form.setError("slug", { message: t("validation.slugTaken") });
         }
-        return err.message || "创建失败，请重试";
+        return error.message || t("toast.failed");
       },
     });
   }
@@ -104,39 +92,34 @@ export function CreateWorkspaceDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>创建工作空间</DialogTitle>
-          <DialogDescription>
-            创建一个新的工作空间来组织你的项目和团队成员。
-          </DialogDescription>
+          <DialogTitle>{t("createTitle")}</DialogTitle>
+          <DialogDescription>{t("createDescription")}</DialogDescription>
         </DialogHeader>
-
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
             className="grid gap-4 py-4"
           >
-            {/* Name 字段 */}
             <FormField
               control={form.control}
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>名称</FormLabel>
+                  <FormLabel>{t("name")}</FormLabel>
                   <FormControl>
                     <Input
-                      placeholder="例如：Acme Corp"
+                      placeholder={t("namePlaceholder")}
                       {...field}
-                      // UX 优化：输入名称时自动填充 slug (如果在 slug 为空的情况下)
-                      onChange={(e) => {
-                        field.onChange(e);
-                        // 简单的自动转换逻辑：空格转连字符，大写转小写
-                        const currentSlug = form.getValues("slug");
-                        if (!currentSlug || currentSlug === "") {
-                          const autoSlug = e.target.value
-                            .toLowerCase()
-                            .replace(/\s+/g, "-")
-                            .replace(/[^a-z0-9-]/g, "");
-                          form.setValue("slug", autoSlug);
+                      onChange={(event) => {
+                        field.onChange(event);
+                        if (!form.getValues("slug")) {
+                          form.setValue(
+                            "slug",
+                            event.target.value
+                              .toLowerCase()
+                              .replace(/\s+/g, "-")
+                              .replace(/[^a-z0-9-]/g, ""),
+                          );
                         }
                       }}
                     />
@@ -145,14 +128,12 @@ export function CreateWorkspaceDialog({
                 </FormItem>
               )}
             />
-
-            {/* Slug 字段 */}
             <FormField
               control={form.control}
               name="slug"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>标识符 (Slug)</FormLabel>
+                  <FormLabel>{t("slug")}</FormLabel>
                   <FormControl>
                     <div className="flex items-center">
                       <span className="text-muted-foreground mr-2 text-sm">
@@ -161,14 +142,11 @@ export function CreateWorkspaceDialog({
                       <Input placeholder="acme-corp" {...field} />
                     </div>
                   </FormControl>
-                  <FormDescription>
-                    这是你的工作空间的唯一 URL 标识。
-                  </FormDescription>
+                  <FormDescription>{t("slugHelp")}</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
-
             <DialogFooter>
               <Button
                 type="button"
@@ -176,11 +154,11 @@ export function CreateWorkspaceDialog({
                 onClick={() => onOpenChange(false)}
                 disabled={isLoading}
               >
-                取消
+                {common("cancel")}
               </Button>
               <Button type="submit" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
-                创建
+                {common("create")}
               </Button>
             </DialogFooter>
           </form>

@@ -2,6 +2,7 @@
 import { useAuthStore } from "@/store";
 import { getBaseUrl } from "@/lib/api/client";
 import { ConfirmDialog } from "./confirm-dialog";
+import { useTranslations } from "next-intl";
 
 interface SignOutDialogProps {
   open: boolean;
@@ -10,6 +11,7 @@ interface SignOutDialogProps {
 
 export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const { logout } = useAuthStore();
+  const t = useTranslations("SignOut");
 
   const handleSignOut = () => {
     logout();
@@ -20,9 +22,9 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
     <ConfirmDialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Sign out"
-      description="Are you sure you want to sign out? You will need to sign in again to access your account."
-      confirmText="Sign out"
+      title={t("title")}
+      description={t("description")}
+      confirmText={t("confirm")}
       onConfirm={handleSignOut}
       className="sm:max-w-sm"
     />

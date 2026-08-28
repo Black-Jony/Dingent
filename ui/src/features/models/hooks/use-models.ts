@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getClientApi } from "@/lib/api/client";
 import { toast } from "sonner";
@@ -11,6 +12,7 @@ import type {
 } from "@/types/entity";
 
 export function useModels(workspaceSlug: string) {
+  const t = useTranslations("Models");
   const qc = useQueryClient();
   const api = getClientApi();
   const wsApi = api.forWorkspace(workspaceSlug);
@@ -26,39 +28,35 @@ export function useModels(workspaceSlug: string) {
   const createMutation = useMutation({
     mutationFn: (data: LLMModelConfigCreate) => wsApi.models.create(data),
     onSuccess: () => {
-      toast.success("Model configuration added successfully!");
+      toast.success(t("addSuccess"));
       qc.invalidateQueries({ queryKey: ["models"] });
     },
-    onError: (e) =>
-      toast.error(getErrorMessage(e, "Add model configuration failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("addFailed"))),
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: LLMModelConfigUpdate }) =>
       wsApi.models.update(id, data),
     onSuccess: () => {
-      toast.success("Model configuration updated!");
+      toast.success(t("updateSuccess"));
       qc.invalidateQueries({ queryKey: ["models"] });
     },
-    onError: (e) =>
-      toast.error(getErrorMessage(e, "Update model configuration failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("updateFailed"))),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => wsApi.models.delete(id),
     onSuccess: () => {
-      toast.success("Model configuration deleted");
+      toast.success(t("deleteSuccess"));
       qc.invalidateQueries({ queryKey: ["models"] });
     },
-    onError: (e) =>
-      toast.error(getErrorMessage(e, "Delete model configuration failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("deleteFailed"))),
   });
 
   const testConnectionMutation = useMutation({
     mutationFn: (data: TestConnectionRequest) =>
       wsApi.models.testConnection(data),
-    onError: (e) =>
-      toast.error(getErrorMessage(e, "Test connection failed")),
+    onError: (e) => toast.error(getErrorMessage(e, t("testFailed"))),
   });
 
   return {

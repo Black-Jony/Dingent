@@ -4,6 +4,7 @@ import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { getClientApi } from "@/lib/api/client";
 import { WorkflowSelector } from "./workflow-selector";
 import { WorkflowDetails } from "./workflow-details";
+import { useTranslations } from "next-intl";
 import {
   useActiveWorkflow,
   useWorkflowsList,
@@ -18,6 +19,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   className = "",
   onClose,
 }) => {
+  const common = useTranslations("Common");
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
@@ -67,7 +69,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
               <button
                 onClick={onClose}
                 className="flex items-center justify-center w-8 h-8 rounded-full text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 transition-all active:scale-95"
-                aria-label="Close"
+                aria-label={common("close")}
               >
                 <X className="w-4 h-4" />
               </button>

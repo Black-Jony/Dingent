@@ -5,11 +5,32 @@ import { CircleCheck, RotateCcw, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "../ui/sidebar";
 import { Collapsible, useDirection, useLayout, useTheme } from "@/providers";
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle, SheetTrigger } from "../ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "../ui/sheet";
 import { Button } from "../ui/button";
-import { IconDir, IconLayoutCompact, IconLayoutDefault, IconLayoutFull, IconSidebarFloating, IconSidebarInset, IconSidebarSidebar, IconThemeDark, IconThemeLight, IconThemeSystem } from "@/assets/icon";
+import {
+  IconDir,
+  IconLayoutCompact,
+  IconLayoutDefault,
+  IconLayoutFull,
+  IconSidebarFloating,
+  IconSidebarInset,
+  IconSidebarSidebar,
+  IconThemeDark,
+  IconThemeLight,
+  IconThemeSystem,
+} from "@/assets/icon";
+import { useTranslations } from "next-intl";
 
 export function ConfigDrawer() {
+  const t = useTranslations("ConfigDrawer");
   const { setOpen } = useSidebar();
   const { resetDir } = useDirection();
   const { resetTheme } = useTheme();
@@ -28,7 +49,7 @@ export function ConfigDrawer() {
         <Button
           size="icon"
           variant="ghost"
-          aria-label="Open theme settings"
+          aria-label={t("open")}
           aria-describedby="config-drawer-description"
           className="rounded-full"
         >
@@ -37,9 +58,9 @@ export function ConfigDrawer() {
       </SheetTrigger>
       <SheetContent className="flex flex-col">
         <SheetHeader className="pb-0 text-start">
-          <SheetTitle>Theme Settings</SheetTitle>
+          <SheetTitle>{t("title")}</SheetTitle>
           <SheetDescription id="config-drawer-description">
-            Adjust the appearance and layout to suit your preferences.
+            {t("description")}
           </SheetDescription>
         </SheetHeader>
         <div className="space-y-6 overflow-y-auto px-4">
@@ -52,9 +73,9 @@ export function ConfigDrawer() {
           <Button
             variant="destructive"
             onClick={handleReset}
-            aria-label="Reset all settings to default values"
+            aria-label={t("resetAll")}
           >
-            Reset
+            {t("reset")}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -106,11 +127,12 @@ function RadioGroupItem({
   };
   isTheme?: boolean;
 }) {
+  const t = useTranslations("ConfigDrawer");
   return (
     <Item
       value={item.value}
       className={cn("group outline-none", "transition duration-200 ease-in")}
-      aria-label={`Select ${item.label.toLowerCase()}`}
+      aria-label={t("selectOption", { option: item.label })}
       aria-describedby={`${item.value}-description`}
     >
       <div
@@ -121,7 +143,7 @@ function RadioGroupItem({
         )}
         role="img"
         aria-hidden="false"
-        aria-label={`${item.label} option preview`}
+        aria-label={t("optionPreview", { option: item.label })}
       >
         <CircleCheck
           className={cn(
@@ -134,7 +156,7 @@ function RadioGroupItem({
         <item.icon
           className={cn(
             !isTheme &&
-            "stroke-primary fill-primary group-data-[state=unchecked]:stroke-muted-foreground group-data-[state=unchecked]:fill-muted-foreground",
+              "stroke-primary fill-primary group-data-[state=unchecked]:stroke-muted-foreground group-data-[state=unchecked]:fill-muted-foreground",
           )}
           aria-hidden="true"
         />
@@ -152,10 +174,11 @@ function RadioGroupItem({
 
 function ThemeConfig() {
   const { defaultTheme, theme, setTheme } = useTheme();
+  const t = useTranslations("ConfigDrawer");
   return (
     <div>
       <SectionTitle
-        title="Theme"
+        title={t("theme")}
         showReset={theme !== defaultTheme}
         onReset={() => setTheme(defaultTheme)}
       />
@@ -163,23 +186,23 @@ function ThemeConfig() {
         value={theme}
         onValueChange={setTheme}
         className="grid w-full max-w-md grid-cols-3 gap-4"
-        aria-label="Select theme preference"
+        aria-label={t("selectTheme")}
         aria-describedby="theme-description"
       >
         {[
           {
             value: "system",
-            label: "System",
+            label: t("system"),
             icon: IconThemeSystem,
           },
           {
             value: "light",
-            label: "Light",
+            label: t("light"),
             icon: IconThemeLight,
           },
           {
             value: "dark",
-            label: "Dark",
+            label: t("dark"),
             icon: IconThemeDark,
           },
         ].map((item) => (
@@ -187,7 +210,7 @@ function ThemeConfig() {
         ))}
       </Radio>
       <div id="theme-description" className="sr-only">
-        Choose between system preference, light mode, or dark mode
+        {t("themeDescription")}
       </div>
     </div>
   );
@@ -195,10 +218,11 @@ function ThemeConfig() {
 
 function SidebarConfig() {
   const { defaultVariant, variant, setVariant } = useLayout();
+  const t = useTranslations("ConfigDrawer");
   return (
     <div className="max-md:hidden">
       <SectionTitle
-        title="Sidebar"
+        title={t("sidebar")}
         showReset={defaultVariant !== variant}
         onReset={() => setVariant(defaultVariant)}
       />
@@ -206,23 +230,23 @@ function SidebarConfig() {
         value={variant}
         onValueChange={setVariant}
         className="grid w-full max-w-md grid-cols-3 gap-4"
-        aria-label="Select sidebar style"
+        aria-label={t("selectSidebar")}
         aria-describedby="sidebar-description"
       >
         {[
           {
             value: "inset",
-            label: "Inset",
+            label: t("inset"),
             icon: IconSidebarInset,
           },
           {
             value: "floating",
-            label: "Floating",
+            label: t("floating"),
             icon: IconSidebarFloating,
           },
           {
             value: "sidebar",
-            label: "Sidebar",
+            label: t("standardSidebar"),
             icon: IconSidebarSidebar,
           },
         ].map((item) => (
@@ -230,7 +254,7 @@ function SidebarConfig() {
         ))}
       </Radio>
       <div id="sidebar-description" className="sr-only">
-        Choose between inset, floating, or standard sidebar layout
+        {t("sidebarDescription")}
       </div>
     </div>
   );
@@ -239,13 +263,14 @@ function SidebarConfig() {
 function LayoutConfig() {
   const { open, setOpen } = useSidebar();
   const { defaultCollapsible, collapsible, setCollapsible } = useLayout();
+  const t = useTranslations("ConfigDrawer");
 
   const radioState = open ? "default" : collapsible;
 
   return (
     <div className="max-md:hidden">
       <SectionTitle
-        title="Layout"
+        title={t("layout")}
         showReset={radioState !== "default"}
         onReset={() => {
           setOpen(true);
@@ -263,23 +288,23 @@ function LayoutConfig() {
           setCollapsible(v as Collapsible);
         }}
         className="grid w-full max-w-md grid-cols-3 gap-4"
-        aria-label="Select layout style"
+        aria-label={t("selectLayout")}
         aria-describedby="layout-description"
       >
         {[
           {
             value: "default",
-            label: "Default",
+            label: t("default"),
             icon: IconLayoutDefault,
           },
           {
             value: "icon",
-            label: "Compact",
+            label: t("compact"),
             icon: IconLayoutCompact,
           },
           {
             value: "offcanvas",
-            label: "Full layout",
+            label: t("fullLayout"),
             icon: IconLayoutFull,
           },
         ].map((item) => (
@@ -287,7 +312,7 @@ function LayoutConfig() {
         ))}
       </Radio>
       <div id="layout-description" className="sr-only">
-        Choose between default expanded, compact icon-only, or full layout mode
+        {t("layoutDescription")}
       </div>
     </div>
   );
@@ -295,10 +320,11 @@ function LayoutConfig() {
 
 function DirConfig() {
   const { defaultDir, dir, setDir } = useDirection();
+  const t = useTranslations("ConfigDrawer");
   return (
     <div>
       <SectionTitle
-        title="Direction"
+        title={t("direction")}
         showReset={defaultDir !== dir}
         onReset={() => setDir(defaultDir)}
       />
@@ -306,20 +332,20 @@ function DirConfig() {
         value={dir}
         onValueChange={setDir}
         className="grid w-full max-w-md grid-cols-3 gap-4"
-        aria-label="Select site direction"
+        aria-label={t("selectDirection")}
         aria-describedby="direction-description"
       >
         {[
           {
             value: "ltr",
-            label: "Left to Right",
+            label: t("leftToRight"),
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir="ltr" {...props} />
             ),
           },
           {
             value: "rtl",
-            label: "Right to Left",
+            label: t("rightToLeft"),
             icon: (props: SVGProps<SVGSVGElement>) => (
               <IconDir dir="rtl" {...props} />
             ),
@@ -329,7 +355,7 @@ function DirConfig() {
         ))}
       </Radio>
       <div id="direction-description" className="sr-only">
-        Choose between left-to-right or right-to-left site direction
+        {t("directionDescription")}
       </div>
     </div>
   );

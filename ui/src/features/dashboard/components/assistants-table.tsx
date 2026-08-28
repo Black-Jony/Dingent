@@ -1,6 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { OverviewAssistantItem } from "@/types/entity";
+import { useTranslations } from "next-intl";
 
 export function AssistantsTable({
   items,
@@ -9,6 +10,7 @@ export function AssistantsTable({
   items: OverviewAssistantItem[];
   loading?: boolean;
 }) {
+  const t = useTranslations("Overview");
   if (loading) {
     return (
       <div className="space-y-2">
@@ -19,17 +21,19 @@ export function AssistantsTable({
     );
   }
   if (!items?.length) {
-    return <div className="text-muted-foreground text-sm">No assistants.</div>;
+    return (
+      <div className="text-muted-foreground text-sm">{t("noAssistants")}</div>
+    );
   }
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead className="text-muted-foreground text-left">
           <tr>
-            <th className="py-1 pr-4 font-medium">Name</th>
-            <th className="py-1 pr-4 font-medium">Status</th>
-            <th className="py-1 pr-4 font-medium">Plugins</th>
-            <th className="py-1 pr-4 font-medium">Enabled</th>
+            <th className="py-1 pr-4 font-medium">{t("name")}</th>
+            <th className="py-1 pr-4 font-medium">{t("status")}</th>
+            <th className="py-1 pr-4 font-medium">{t("plugins")}</th>
+            <th className="py-1 pr-4 font-medium">{t("enabled")}</th>
           </tr>
         </thead>
         <tbody>

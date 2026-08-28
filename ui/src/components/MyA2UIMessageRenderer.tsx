@@ -28,6 +28,7 @@ import { DataTable } from "./A2UI/data-table";
 import { ErrorBoundary } from "react-error-boundary";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
+import { useTranslations } from "next-intl";
 
 type ReactActivityMessageRenderer<TContent = any> = {
   activityType: string;
@@ -182,11 +183,14 @@ function ErrorFallback({
   error: Error;
   resetErrorBoundary: () => void;
 }) {
+  const t = useTranslations("Renderer");
+  const common = useTranslations("Common");
+
   return (
     <div className="p-4 border border-red-200 bg-red-50 rounded-md text-red-600 flex flex-col gap-2 my-2">
       <div className="flex items-center gap-2 font-semibold">
         <Ban className="w-4 h-4" />
-        <span>Component Render Error</span>
+        <span>{t("componentError")}</span>
       </div>
       <p className="text-sm opacity-80 break-all">{error.message}</p>
       <Button
@@ -195,13 +199,14 @@ function ErrorFallback({
         onClick={resetErrorBoundary}
         className="w-fit mt-2 bg-white"
       >
-        Retry
+        {common("retry")}
       </Button>
     </div>
   );
 }
 
 function TableView({ data }: { data: TableContent }) {
+  const t = useTranslations("Renderer");
   const normalizedData = useMemo(() => normalizeTableContent(data), [data]);
   const { columns: rawColumns, rows, title } = normalizedData;
 
@@ -226,7 +231,7 @@ function TableView({ data }: { data: TableContent }) {
             const value = row.getValue(colName);
             return <div className="font-medium">{renderCellValue(value)}</div>;
           } catch (e) {
-            return <span className="text-red-400 text-xs">Error</span>;
+            return <span className="text-red-400 text-xs">{t("error")}</span>;
           }
         },
       }));
@@ -234,12 +239,10 @@ function TableView({ data }: { data: TableContent }) {
       console.error("Error generating columns:", e);
       return [];
     }
-  }, [rawColumns]);
+  }, [rawColumns, t]);
 
   if (!rawColumns || rawColumns.length === 0) {
-    return (
-      <div className="p-4 text-gray-500 italic">No data columns available.</div>
-    );
+    return <div className="p-4 text-gray-500 italic">{t("noColumns")}</div>;
   }
 
   return (
@@ -250,9 +253,7 @@ function TableView({ data }: { data: TableContent }) {
       {safeColumns.length > 0 ? (
         <DataTable columns={safeColumns} data={rows || []} />
       ) : (
-        <div className="text-sm text-red-500">
-          Could not render table columns.
-        </div>
+        <div className="text-sm text-red-500">{t("couldNotRenderColumns")}</div>
       )}
     </div>
   );
@@ -288,16 +289,17 @@ function getActiveSpeciesName(content: LegacyDisplayContent): string {
 }
 
 function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
+  const t = useTranslations("Renderer");
   const imageBase64 = content.sankey_image_base64;
   const speciesButtons = content.species_overview?.species_buttons;
   const mode = content.summary?.mode ?? content.data?.mode;
   const isTraitMode = mode === "trait";
   const activeSpeciesName = getActiveSpeciesName(content);
   const title = content.summary?.trait_name ?? content.title;
-  const resultTable = toLegacyTable(content.association_table, "Results");
+  const resultTable = toLegacyTable(content.association_table, t("results"));
   const overviewTable = toLegacyTable(
     content.species_overview?.association_table,
-    activeSpeciesName ? `Species (${activeSpeciesName})` : "Species",
+    activeSpeciesName ? `${t("species")} (${activeSpeciesName})` : t("species"),
   );
 
   const handleSwitchSpecies = (species: LegacySpeciesButton) => {
@@ -326,7 +328,9 @@ function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
     <div className="w-full my-4 space-y-4">
       {!isTraitMode && speciesButtons && speciesButtons.length > 0 && (
         <div className="rounded-md border px-3 py-3">
-          <div className="mb-2 text-sm font-medium text-gray-700">Species</div>
+          <div className="mb-2 text-sm font-medium text-gray-700">
+            {t("species")}
+          </div>
           <div className="flex flex-wrap gap-2">
             {speciesButtons.map((species) => (
               <Button
@@ -358,7 +362,7 @@ function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
             <PhotoView src={imageSrc}>
               <img
                 src={imageSrc}
-                alt={title || "Sankey Diagram"}
+                alt={title || t("sankeyDiagram")}
                 className="max-w-full h-auto rounded border cursor-zoom-in"
               />
             </PhotoView>
@@ -369,7 +373,7 @@ function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
       {resultTable && <TableView data={resultTable} />}
 
       {!imageSrc && !resultTable && !overviewTable && (
-        <div className="p-4 text-gray-500 italic">No data to display.</div>
+        <div className="p-4 text-gray-500 italic">{t("noData")}</div>
       )}
     </div>
   );
@@ -407,6 +411,7 @@ const PreviewImage = (props: any) => {
 
 const MarkdownView = memo(
   ({ data }: { data: MarkdownContent }) => {
+    const t = useTranslations("Renderer");
     const { title, content } = data;
     const [isExpanded, setIsExpanded] = useState(false);
 
@@ -483,12 +488,13 @@ const MarkdownView = memo(
                 {isExpanded ? (
                   <>
                     {" "}
-                    <ChevronUp className="w-3 h-3 mr-1" /> Show Less{" "}
+                    <ChevronUp className="w-3 h-3 mr-1" /> {t("showLess")}{" "}
                   </>
                 ) : (
                   <>
                     {" "}
-                    <ChevronDown className="w-3 h-3 mr-1" /> Show More{" "}
+                    <ChevronDown className="w-3 h-3 mr-1" />{" "}
+                    {t("showMore")}{" "}
                   </>
                 )}
               </Button>
@@ -506,6 +512,7 @@ const MarkdownView = memo(
     );
   },
 );
+MarkdownView.displayName = "MarkdownView";
 
 function getSurfaceId(content: OfficialA2UIContent) {
   if (content.surfaceId) return content.surfaceId;
@@ -519,6 +526,7 @@ function getSurfaceId(content: OfficialA2UIContent) {
 }
 
 function OfficialA2UIRenderer({ content }: { content: OfficialA2UIContent }) {
+  const t = useTranslations("Renderer");
   const { processMessages } = useA2UIActions();
   const surfaceId = getSurfaceId(content);
 
@@ -530,7 +538,7 @@ function OfficialA2UIRenderer({ content }: { content: OfficialA2UIContent }) {
     return (
       <div className="p-4 border border-red-200 rounded text-red-500 flex items-center gap-2">
         <AlertCircle className="w-4 h-4" />
-        <span>A2UI surface id is missing.</span>
+        <span>{t("surfaceMissing")}</span>
       </div>
     );
   }
@@ -552,6 +560,25 @@ function OfficialA2UISurface({
   );
 }
 
+function InvalidDataError() {
+  const t = useTranslations("Renderer");
+  return (
+    <div className="p-4 border border-red-200 rounded text-red-500 flex items-center gap-2">
+      <AlertCircle className="w-4 h-4" />
+      <span>{t("invalidData")}</span>
+    </div>
+  );
+}
+
+function UnknownContentType({ type }: { type: unknown }) {
+  const t = useTranslations("Renderer");
+  return (
+    <p className="font-semibold">
+      {t("unknownContentType", { type: String(type) })}
+    </p>
+  );
+}
+
 // --- 5. 主渲染器工厂函数 ---
 
 export type MessageRendererOptions = {
@@ -563,12 +590,7 @@ export function createA2UIMessageRenderer(
 ): ReactActivityMessageRenderer<any> {
   const renderContent = (content: any) => {
     if (!content || typeof content !== "object") {
-      return (
-        <div className="p-4 border border-red-200 rounded text-red-500 flex items-center gap-2">
-          <AlertCircle className="w-4 h-4" />
-          <span>Data format error: Content is missing or invalid.</span>
-        </div>
-      );
+      return <InvalidDataError />;
     }
 
     if (Array.isArray(content)) {
@@ -609,9 +631,7 @@ export function createA2UIMessageRenderer(
 
         return (
           <div className="p-4 border border-yellow-200 bg-yellow-50 rounded text-yellow-700 text-sm">
-            <p className="font-semibold">
-              Unknown content type: {content.type}
-            </p>
+            <UnknownContentType type={content.type} />
             <pre className="mt-2 text-xs opacity-80 overflow-auto max-h-40">
               {JSON.stringify(content, null, 2)}
             </pre>

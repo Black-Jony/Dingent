@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { OverviewPluginItem } from "@/types/entity";
-
+import { useTranslations } from "next-intl";
 
 export function PluginsMiniList({
   plugins,
@@ -11,6 +11,7 @@ export function PluginsMiniList({
   loading?: boolean;
   max?: number;
 }) {
+  const t = useTranslations("Overview");
   if (loading) {
     return (
       <div className="space-y-2">
@@ -22,7 +23,7 @@ export function PluginsMiniList({
   }
   if (!plugins?.length) {
     return (
-      <div className="text-muted-foreground text-sm">No plugins installed.</div>
+      <div className="text-muted-foreground text-sm">{t("noPlugins")}</div>
     );
   }
   return (
@@ -35,13 +36,13 @@ export function PluginsMiniList({
           <span className="font-medium">{p.name}</span>
           <span className="text-muted-foreground text-xs">v{p.version}</span>
           <span className="text-muted-foreground text-xs">
-            {p.tool_count} tools
+            {t("tools", { count: p.tool_count })}
           </span>
         </li>
       ))}
       {plugins.length > max && (
         <li className="text-muted-foreground text-xs">
-          +{plugins.length - max} more...
+          {t("more", { count: plugins.length - max })}
         </li>
       )}
     </ul>

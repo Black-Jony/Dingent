@@ -1,4 +1,7 @@
+"use client";
+
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 
 export type MessageRendererOptions = {
   theme?: any;
@@ -15,6 +18,7 @@ export default function PaginatedTable({
   columns: string[];
   rows: any[];
 }) {
+  const t = useTranslations("Renderer");
   const [currentPage, setCurrentPage] = useState(1);
 
   // 计算总页数
@@ -32,9 +36,11 @@ export default function PaginatedTable({
     <div className="w-full overflow-hidden rounded-lg border border-gray-200 shadow-sm bg-white">
       {/* 标题栏 */}
       <div className="px-6 py-3 border-b border-gray-100 flex items-center justify-between bg-blue-50">
-        <h3 className="text-sm font-semibold text-blue-800">Data Table</h3>
+        <h3 className="text-sm font-semibold text-blue-800">
+          {t("dataTable")}
+        </h3>
         <span className="text-xs font-medium px-2.5 py-0.5 rounded border bg-white text-blue-600 border-blue-200">
-          Total: {rows.length}
+          {t("total", { count: rows.length })}
         </span>
       </div>
 
@@ -69,7 +75,7 @@ export default function PaginatedTable({
                   colSpan={columns.length}
                   className="px-6 py-4 text-center text-gray-400 text-sm"
                 >
-                  No data available
+                  {t("noDataAvailable")}
                 </td>
               </tr>
             )}
@@ -81,9 +87,7 @@ export default function PaginatedTable({
       {totalPages > 1 && (
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <span className="text-xs text-gray-500">
-            Page{" "}
-            <span className="font-medium text-gray-900">{currentPage}</span> of{" "}
-            <span className="font-medium text-gray-900">{totalPages}</span>
+            {t("page", { current: currentPage, total: totalPages })}
           </span>
           <div className="flex gap-2">
             <button
@@ -91,14 +95,14 @@ export default function PaginatedTable({
               disabled={currentPage === 1}
               className="px-3 py-1 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Previous
+              {t("previous")}
             </button>
             <button
               onClick={goToNext}
               disabled={currentPage === totalPages}
               className="px-3 py-1 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Next
+              {t("next")}
             </button>
           </div>
         </div>
