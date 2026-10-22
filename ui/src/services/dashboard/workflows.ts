@@ -1,4 +1,9 @@
-import { Workflow, WorkflowSummary, WorkflowNode, WorkflowEdge } from "@/types/entity";
+import {
+  Workflow,
+  WorkflowSummary,
+  WorkflowNode,
+  WorkflowEdge,
+} from "@/types/entity";
 import type { AxiosInstance } from "axios";
 
 // --- DTO Types (Internal) ---
@@ -28,6 +33,7 @@ interface WorkflowDTO {
   id: string;
   name: string;
   description: string | null;
+  model_config_id?: string | null;
   created_at?: string;
   updated_at?: string;
   nodes: WorkflowNodeDTO[];
@@ -35,7 +41,10 @@ interface WorkflowDTO {
 }
 
 export class WorkflowsApi {
-  constructor(private http: AxiosInstance, private basePath: string = "") { }
+  constructor(
+    private http: AxiosInstance,
+    private basePath: string = "",
+  ) {}
 
   private url(path: string = ""): string {
     return `${this.basePath}${path}`;
@@ -56,7 +65,10 @@ export class WorkflowsApi {
   }
 
   /** POST / */
-  async create(payload: { name: string; description?: string }): Promise<Workflow> {
+  async create(payload: {
+    name: string;
+    description?: string;
+  }): Promise<Workflow> {
     const { data } = await this.http.post<Workflow>(this.url(""), payload);
     return data;
   }
@@ -84,13 +96,29 @@ export class WorkflowsApi {
       })),
     };
 
-    const { data } = await this.http.put<WorkflowSummary>(this.url(`/${wf.id}`), payload);
+    const { data } = await this.http.put<WorkflowSummary>(
+      this.url(`/${wf.id}`),
+      payload,
+    );
     return data;
   }
 
   /** DELETE /:id */
   async delete(id: string): Promise<void> {
     await this.http.delete(this.url(`/${id}`));
+  }
+
+  async updateSettings(
+    id: string,
+    updates: Partial<
+      Pick<Workflow, "name" | "description" | "model_config_id">
+    >,
+  ): Promise<WorkflowSummary> {
+    const { data } = await this.http.patch<WorkflowSummary>(
+      this.url(`/${id}`),
+      updates,
+    );
+    return data;
   }
 
   // --- Private Transformers ---
@@ -100,6 +128,7 @@ export class WorkflowsApi {
       id: dto.id,
       name: dto.name,
       description: dto.description ?? undefined,
+      model_config_id: dto.model_config_id ?? null,
       created_at: dto.created_at,
       updated_at: dto.updated_at,
       nodes: dto.nodes.map(this.transformNode),

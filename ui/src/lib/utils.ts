@@ -2,6 +2,7 @@ import { useAuthStore } from "@/store/auth";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import { v7 as uuidv7 } from "uuid";
+import { isAxiosError } from "axios";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -75,6 +76,18 @@ export function getErrorMessage(
   error: unknown,
   defaultMessage = "An unexpected error occurred.",
 ): string {
+  if (isAxiosError<{ detail?: unknown }>(error)) {
+    const detail = error.response?.data?.detail;
+    if (typeof detail === "string" && detail.trim()) return detail;
+    if (Array.isArray(detail)) {
+      const messages = detail.flatMap((issue) =>
+        issue && typeof issue === "object" && typeof issue.msg === "string"
+          ? [issue.msg]
+          : [],
+      );
+      if (messages.length) return messages.join("; ");
+    }
+  }
   if (error instanceof Error) {
     return error.message;
   }
@@ -101,10 +114,11 @@ export function toStr(v: unknown): string {
 export function getOrSetVisitorId(): string {
   const state = useAuthStore.getState();
   if (typeof window === "undefined") return "";
-  let id = state.visitorId;
-  if (!id) {
-    id = uuidv7();
-    state.setVisitorId(id);
-  }
+  const id =
+    window.localStorage.getItem("dingent_visitor_id") ||
+    state.visitorId ||
+    uuidv7();
+  window.localStorage.setItem("dingent_visitor_id", id);
+  if (state.visitorId !== id) state.setVisitorId(id);
   return id;
 }

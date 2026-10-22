@@ -33,7 +33,7 @@ import { ModelConfigDialog } from "./model-config-dialog";
 
 interface ModelsTableProps {
   models: LLMModelConfig[];
-  onEdit: (id: string, data: LLMModelConfigUpdate) => void;
+  onEdit: (id: string, data: LLMModelConfigUpdate) => Promise<unknown>;
   onDelete: (id: string) => void;
   onTestConnection?: (
     data: TestConnectionRequest,

@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { createTranslator } from "next-intl";
+import { locales, localeCookieName } from "../src/i18n/config";
 
 const visitorId = "018f4d80-0000-7000-8000-000000000001";
 const WORKSPACE_SLUG = "playwright-e2e";
@@ -271,6 +274,430 @@ async function seedGuestThread(page: any) {
 /* ── Tests ──────────────────────────────────────────────────── */
 
 test.describe("Tool call activity rendering E2E", () => {
+  test("settles paced execution across completion, stop, and consecutive questions", async ({
+    page,
+  }) => {
+    await seedGuestThread(page);
+    await interceptAgentRoute(page, "");
+    await page.addInitScript(() => {
+      const originalFetch = window.fetch.bind(window);
+      let runNumber = 0;
+      window.fetch = async (request, init) => {
+        const url = request instanceof Request ? request.url : String(request);
+        if (!/\/chat\/agent\/.*\/run$/.test(url))
+          return originalFetch(request, init);
+        const input = JSON.parse(String(init?.body));
+        const currentRun = ++runNumber;
+        const callId = `paced-call-${input.runId}`;
+        const answerId = `paced-answer-${input.runId}`;
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            let closed = false;
+            const signal =
+              init?.signal ??
+              (request instanceof Request ? request.signal : undefined);
+            signal?.addEventListener(
+              "abort",
+              () => {
+                if (closed) return;
+                closed = true;
+                controller.error(
+                  new DOMException("Request stopped", "AbortError"),
+                );
+              },
+              { once: true },
+            );
+            const send = (event: Record<string, unknown>) =>
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify(event)}\n\n`),
+              );
+            send({
+              type: "RUN_STARTED",
+              threadId: input.threadId,
+              runId: input.runId,
+            });
+            send({
+              type: "TOOL_CALL_START",
+              toolCallId: callId,
+              toolCallName: "direct_index_status",
+              parentMessageId: `paced-tool-${input.runId}`,
+            });
+            send({
+              type: "TOOL_CALL_ARGS",
+              toolCallId: callId,
+              delta: "{}",
+            });
+            send({ type: "TOOL_CALL_END", toolCallId: callId });
+            send({
+              type: "TOOL_CALL_RESULT",
+              toolCallId: callId,
+              messageId: `paced-result-${input.runId}`,
+              role: "tool",
+              content: "Done",
+            });
+            send({
+              type: "TEXT_MESSAGE_START",
+              messageId: answerId,
+              role: "assistant",
+            });
+            send({
+              type: "TEXT_MESSAGE_CONTENT",
+              messageId: answerId,
+              delta: `Streaming answer ${currentRun}.`,
+            });
+            const controls = window as typeof window & {
+              advanceExecutionTest?: (finish: boolean) => void;
+            };
+            controls.advanceExecutionTest = (finish) => {
+              if (closed) return;
+              if (!finish) {
+                send({
+                  type: "TEXT_MESSAGE_CONTENT",
+                  messageId: answerId,
+                  delta: "\n\nFinal answer completed.",
+                });
+                return;
+              }
+              send({ type: "TEXT_MESSAGE_END", messageId: answerId });
+              send({
+                type: "RUN_FINISHED",
+                threadId: input.threadId,
+                runId: input.runId,
+              });
+              closed = true;
+              controller.close();
+            };
+          },
+        });
+        return new Response(stream, {
+          headers: { "Content-Type": "text/event-stream" },
+        });
+      };
+    });
+    await page.goto(`/dingent-resource/guest/${WORKSPACE_SLUG}/chat`);
+    const input = page.getByRole("textbox").last();
+    await expect(input).toBeVisible();
+    await input.fill("Verify paced execution state");
+    await input.press("Enter");
+    await expect(
+      page.getByText("Streaming answer 1.", { exact: true }),
+    ).toBeVisible();
+    const trace = page.locator("[data-execution-trace]");
+    const toggle = trace.getByRole("button");
+    await expect(toggle).toContainText("Working...");
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await page.evaluate(() => {
+      (
+        window as typeof window & {
+          advanceExecutionTest: (finish: boolean) => void;
+        }
+      ).advanceExecutionTest(false);
+    });
+    await expect(
+      page.getByText("Final answer completed.", { exact: true }),
+    ).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await page.evaluate(() => {
+      (
+        window as typeof window & {
+          advanceExecutionTest: (finish: boolean) => void;
+        }
+      ).advanceExecutionTest(true);
+    });
+    await expect(toggle).toContainText("Execution complete");
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(trace.locator(".animate-spin")).toHaveCount(0);
+    await expect(page.locator(".animate-spin")).toHaveCount(0);
+
+    await input.fill("Stop the next answer");
+    await input.press("Enter");
+    await expect(
+      page.getByText("Streaming answer 2.", { exact: true }),
+    ).toBeVisible();
+    await expect(toggle).toContainText("Working...");
+    await page.getByTestId("copilot-send-button").click();
+    await expect(page.locator(".animate-spin")).toHaveCount(0);
+    await expect(toggle).not.toContainText("Working...");
+
+    await input.fill("Ask again after stopping");
+    await input.press("Enter");
+    await expect(
+      page.getByText("Streaming answer 3.", { exact: true }),
+    ).toBeVisible();
+    await expect(toggle).toContainText("Working...");
+    await page.evaluate(() => {
+      (
+        window as typeof window & {
+          advanceExecutionTest: (finish: boolean) => void;
+        }
+      ).advanceExecutionTest(true);
+    });
+    await expect(toggle).toContainText("Execution complete");
+    await expect(page.locator(".animate-spin")).toHaveCount(0);
+  });
+
+  test("renders compact grouped execution traces across seven languages and screen sizes", async ({
+    page,
+    baseURL,
+  }, testInfo) => {
+    test.setTimeout(90_000);
+    await seedGuestThread(page);
+    const events: Array<Record<string, unknown>> = [
+      { type: "RUN_STARTED", threadId: "trace-thread", runId: "trace-run" },
+    ];
+    for (const [index, name] of [
+      "query_database_record",
+      "write_todos",
+      "query_database_record",
+    ].entries()) {
+      const id = `trace-call-${index}`;
+      events.push(
+        {
+          type: "TOOL_CALL_START",
+          toolCallId: id,
+          toolCallName: name,
+          parentMessageId: `trace-message-${index}`,
+        },
+        {
+          type: "TOOL_CALL_ARGS",
+          toolCallId: id,
+          delta: JSON.stringify(
+            name === "write_todos" ? { todos: [] } : { query: "demo" },
+          ),
+        },
+        { type: "TOOL_CALL_END", toolCallId: id },
+        {
+          type: "TOOL_CALL_RESULT",
+          toolCallId: id,
+          messageId: `trace-result-${index}`,
+          role: "tool",
+          content: "Done",
+        },
+      );
+    }
+    events.push(
+      {
+        type: "TEXT_MESSAGE_START",
+        messageId: "trace-answer",
+        role: "assistant",
+      },
+      {
+        type: "TEXT_MESSAGE_CONTENT",
+        messageId: "trace-answer",
+        delta: "Execution display verified.",
+      },
+      { type: "TEXT_MESSAGE_END", messageId: "trace-answer" },
+      { type: "RUN_FINISHED", threadId: "trace-thread", runId: "trace-run" },
+    );
+    await interceptAgentRoute(page, events.map(sseEvent).join(""));
+    for (const locale of locales) {
+      await page.context().addCookies([
+        {
+          name: localeCookieName,
+          value: locale,
+          url: new URL(baseURL!).origin,
+        },
+      ]);
+      const t = createTranslator({
+        locale,
+        messages: JSON.parse(readFileSync(`messages/${locale}.json`, "utf8")),
+        namespace: "Chat.thinking",
+      });
+      for (const width of [1440, 390]) {
+        await page.setViewportSize({ width, height: 1000 });
+        await page.goto(`/dingent-resource/guest/${WORKSPACE_SLUG}/chat`);
+        const input = page.getByRole("textbox").last();
+        await expect(input).toBeVisible();
+        await input.fill("Verify compact execution display");
+        await input.press("Enter");
+        await expect(
+          page.getByText("Execution display verified."),
+        ).toBeVisible();
+        const trace = page.locator("[data-execution-trace]");
+        const toggle = trace.getByRole("button");
+        await expect(toggle).toHaveAttribute("aria-expanded", "false");
+        await expect(
+          trace.getByText(t("completed"), { exact: true }),
+        ).toBeVisible();
+        await expect(
+          trace.getByText(t("stepCount", { count: 1 }), { exact: true }),
+        ).toBeVisible();
+        await toggle.click();
+        await expect(
+          trace.locator("ol").first().locator(":scope > li"),
+        ).toHaveCount(1);
+        const details = trace.locator("summary");
+        await expect(details).toHaveText(t("callDetails", { count: 2 }));
+        await details.click();
+        await expect(trace.locator("details")).toHaveAttribute("open", "");
+        await expect(trace).not.toContainText("write todos");
+        await expect(trace).not.toContainText("Step 1");
+        await expect(trace.locator(".animate-spin")).toHaveCount(0);
+        const overflow = await page.evaluate(
+          () => document.documentElement.scrollWidth > window.innerWidth,
+        );
+        expect(overflow).toBe(false);
+        if (
+          (locale === "zh-CN" && width === 1440) ||
+          (locale === "ar" && width === 390)
+        ) {
+          if (locale === "ar")
+            await page.evaluate(() =>
+              document.documentElement.classList.add("dark"),
+            );
+          await page.screenshot({
+            path: testInfo.outputPath(`${locale}-${width}.png`),
+            fullPage: true,
+          });
+        }
+      }
+    }
+  });
+
+  test("hides plan cards and acknowledgments during a new answer and after reloading history", async ({
+    page,
+  }) => {
+    await seedGuestThread(page);
+    const snapshot: Array<Record<string, unknown>> = [];
+    const events: Array<Record<string, unknown>> = [];
+    let threadId = "";
+    const question = "Run a plan update regression";
+    for (let index = 0; index < 4; index++) {
+      const callId = `plan-call-${index}`;
+      const messageId = `plan-message-${index}`;
+      const todos = [
+        { content: `Plan revision ${index + 1}`, status: "in_progress" },
+      ];
+      const args = JSON.stringify({ todos });
+      const result = `Updated todo list to ${JSON.stringify(todos)}`;
+      snapshot.push({
+        id: messageId,
+        role: "assistant",
+        content: "",
+        toolCalls: [
+          {
+            id: callId,
+            type: "function",
+            function: { name: "write_todos", arguments: args },
+          },
+        ],
+      });
+      snapshot.push({
+        id: `plan-result-${index}`,
+        role: "tool",
+        toolCallId: callId,
+        content: result,
+      });
+      events.push(
+        {
+          type: "TOOL_CALL_START",
+          toolCallId: callId,
+          toolCallName: "write_todos",
+          parentMessageId: messageId,
+        },
+        { type: "TOOL_CALL_ARGS", toolCallId: callId, delta: args },
+        { type: "TOOL_CALL_END", toolCallId: callId },
+        {
+          type: "TOOL_CALL_RESULT",
+          messageId: `plan-result-${index}`,
+          toolCallId: callId,
+          role: "tool",
+          content: result,
+        },
+      );
+    }
+    snapshot.push({
+      id: "plan-answer",
+      role: "assistant",
+      content: "Plan regression finished.",
+    });
+    await page.route(/\/chat\/agent\/.*\/(connect|run)$/, async (route) => {
+      if (route.request().method() !== "POST") return route.continue();
+      const input = route.request().postDataJSON();
+      threadId = input.threadId;
+      const run = route.request().url().endsWith("/run");
+      const body = run
+        ? [
+            { type: "RUN_STARTED", threadId, runId: "plan-run" },
+            ...events,
+            {
+              type: "TEXT_MESSAGE_START",
+              messageId: "plan-answer",
+              role: "assistant",
+            },
+            {
+              type: "TEXT_MESSAGE_CONTENT",
+              messageId: "plan-answer",
+              delta: "Plan regression finished.",
+            },
+            { type: "TEXT_MESSAGE_END", messageId: "plan-answer" },
+            { type: "RUN_FINISHED", threadId, runId: "plan-run" },
+          ]
+        : [
+            { type: "RUN_STARTED", threadId, runId: input.runId },
+            {
+              type: "MESSAGES_SNAPSHOT",
+              messages: snapshot.some((message) => message.role === "user")
+                ? snapshot
+                : [],
+            },
+            { type: "RUN_FINISHED", threadId, runId: input.runId },
+          ];
+      if (run && !snapshot.some((message) => message.role === "user"))
+        snapshot.unshift({
+          id: "plan-question",
+          role: "user",
+          content: question,
+        });
+      await route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: body.map(sseEvent).join(""),
+      });
+    });
+    await page.goto(`/dingent-resource/guest/${WORKSPACE_SLUG}/chat`);
+    const input = page.getByRole("textbox").last();
+    await expect(input).toBeVisible();
+    await input.fill(question);
+    await input.press("Enter");
+    await expect(page.getByText("Plan regression finished.")).toBeVisible();
+    await expect(page.getByText("Execution Plan", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("Plan updated.", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText(/^Plan revision [1-4]$/)).toHaveCount(0);
+    await expect(page.locator(".animate-spin")).toHaveCount(0);
+    await page.route(
+      /\/api\/v1\/playwright-e2e\/chat\/threads$/,
+      async (route) => {
+        await route.fulfill({
+          json: [
+            {
+              id: threadId,
+              title: question,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        });
+      },
+    );
+    await page.reload();
+    await expect(page.getByText("Plan regression finished.")).toBeVisible();
+    await expect(page.getByText("Execution Plan", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText("Plan updated.", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText(/^Plan revision [1-4]$/)).toHaveCount(0);
+    await expect(page.locator(".animate-spin")).toHaveCount(0);
+  });
+
   test("renders markdown activity message in the middle section", async ({
     page,
   }) => {

@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -31,8 +31,8 @@ export default function LogsPage() {
   const wsApi = api.forWorkspace(slug);
 
   const statsQ = useQuery({
-    queryKey: ["log-stats"],
-    queryFn: () => wsApi.logs.list(),
+    queryKey: ["log-stats", slug],
+    queryFn: () => wsApi.logs.stats(),
     refetchInterval: autoRefresh ? 10_000 : false,
   });
 
@@ -42,7 +42,7 @@ export default function LogsPage() {
   const [limit, setLimit] = useState<number>(100);
 
   const logsQ = useQuery({
-    queryKey: ["logs", level, module, search, limit],
+    queryKey: ["logs", slug, level, module, search, limit],
     queryFn: () =>
       wsApi.logs.list({
         level: level === "All" ? "" : level,
@@ -54,23 +54,8 @@ export default function LogsPage() {
     refetchInterval: autoRefresh ? 10_000 : false,
   });
 
-  const total = statsQ.data?.length ?? 0;
-  const byLevelEntries = useMemo(() => {
-    const logs = statsQ.data || [];
-
-    const counts = logs.reduce(
-      (acc, log) => {
-        const lvl = log.level || "Unknown";
-
-        acc[lvl] = (acc[lvl] || 0) + 1;
-
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
-
-    return Object.entries(counts);
-  }, [statsQ.data]);
+  const total = statsQ.data?.total_logs ?? 0;
+  const byLevelEntries = Object.entries(statsQ.data?.by_level ?? {});
 
   return (
     <>
@@ -91,20 +76,7 @@ export default function LogsPage() {
         >
           {common("refresh")}
         </Button>
-        <Button
-          variant="destructive"
-          onClick={async () => {
-            const ok = await wsApi.logs.clear();
-            if (ok) {
-              toast.success(t("clearSuccess"));
-              await qc.invalidateQueries({ queryKey: ["logs"] });
-              await qc.invalidateQueries({ queryKey: ["log-stats"] });
-            } else {
-              toast.error(t("clearFailed"));
-            }
-          }}
-          className="shadow-lg"
-        >
+        <Button variant="destructive" disabled className="shadow-lg">
           {t("clearAll")}
         </Button>
       </FloatingActionButton>
@@ -170,7 +142,11 @@ export default function LogsPage() {
               max={500}
               step={10}
               value={limit}
-              onChange={(e) => setLimit(Number(e.target.value))}
+              onChange={(e) =>
+                setLimit(
+                  Math.min(500, Math.max(10, Number(e.target.value) || 100)),
+                )
+              }
             />
           </div>
         </div>
@@ -222,9 +198,13 @@ export default function LogsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(log.message || "");
-                      toast.success(t("copied"));
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(log.message || "");
+                        toast.success(t("copied"));
+                      } catch {
+                        toast.error(common("error"));
+                      }
                     }}
                   >
                     {common("copy")}

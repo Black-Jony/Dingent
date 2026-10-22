@@ -20,9 +20,9 @@ vi.mock("react-photo-view", () => ({
 vi.mock("react-photo-view/dist/react-photo-view.css", () => ({}));
 
 vi.mock("./A2UI/data-table", () => ({
-  DataTable: ({ columns, data }: { columns: Array<{ accessorKey: string }>; data: Array<Record<string, unknown>> }) => (
+  DataTable: ({ columns, data }: { columns: Array<{ id?: string; accessorKey?: string }>; data: Array<Record<string, unknown>> }) => (
     <div data-testid="legacy-table">
-      <div data-testid="table-columns">{columns.map((c) => c.accessorKey).join(",")}</div>
+      <div data-testid="table-columns">{columns.map((c) => c.id ?? c.accessorKey).join(",")}</div>
       <div data-testid="table-rows">{JSON.stringify(data)}</div>
     </div>
   ),

@@ -9,7 +9,11 @@ const messagesDirectory = path.join(uiDirectory, "messages");
 const sourceLocale = "en";
 const targets = {
   "zh-CN": "Simplified Chinese",
+  fr: "French",
   ja: "Japanese",
+  ru: "Russian",
+  ar: "Arabic",
+  es: "Spanish",
 };
 const lockPath = path.join(messagesDirectory, ".i18n-lock.json");
 
@@ -165,7 +169,7 @@ async function translateBatch(entries, locale, language) {
   const model = process.env.I18N_TRANSLATION_MODEL;
   if (!baseUrl || !model) {
     throw new Error(
-      "Translations are stale. Set I18N_TRANSLATION_API_BASE and I18N_TRANSLATION_MODEL, then run bun run i18n:sync.",
+      "Translations are stale. Edit all locale catalogs manually, or configure I18N_TRANSLATION_API_BASE and I18N_TRANSLATION_MODEL to create a draft with bun run i18n:sync.",
     );
   }
 
@@ -251,7 +255,7 @@ async function check() {
 
   if (errors.length > 0) {
     throw new Error(
-      `Translation catalogs are out of sync:\n- ${errors.join("\n- ")}\nRun bun run i18n:sync.`,
+      `Translation catalogs are out of sync:\n- ${errors.join("\n- ")}\nReview every locale, then run bun run i18n:approve -- --reviewed.`,
     );
   }
   console.log(`i18n check passed: ${Object.keys(sourceFlat).length} messages.`);
@@ -264,7 +268,6 @@ async function sync() {
   const sourceFlat = flattenMessages(source);
   const sourceKeys = Object.keys(sourceFlat);
   const nextCatalogs = {};
-  const nextHashes = {};
   const batchSize = Math.max(
     1,
     Number.parseInt(process.env.I18N_TRANSLATION_BATCH_SIZE ?? "20", 10) || 20,
@@ -306,9 +309,6 @@ async function sync() {
     }
 
     nextCatalogs[locale] = rebuildMessages(source, targetFlat);
-    nextHashes[locale] = Object.fromEntries(
-      sourceKeys.map((key) => [key, sourceHash(sourceFlat[key])]),
-    );
   }
 
   for (const locale of Object.keys(targets)) {
@@ -320,23 +320,39 @@ async function sync() {
     }
   }
 
+  console.log(
+    `i18n draft complete: ${sourceKeys.length} messages, ${translatedCount} translations requested. Review every changed translation before approval.`,
+  );
+}
+
+async function approve() {
+  if (!process.argv.includes("--reviewed")) {
+    throw new Error("Review changed translations first, then run bun run i18n:approve -- --reviewed.");
+  }
+  const { source, localized } = await loadCatalogs();
+  const sourceFlat = flattenMessages(source);
+  const hashes = Object.fromEntries(
+    Object.entries(sourceFlat).map(([key, value]) => [key, sourceHash(value)]),
+  );
+  const errors = [];
+  for (const locale of Object.keys(targets)) {
+    errors.push(
+      ...catalogErrors(sourceFlat, flattenMessages(localized[locale]), locale, hashes),
+    );
+  }
+  if (errors.length) {
+    throw new Error(`Cannot approve incomplete catalogs:\n- ${errors.join("\n- ")}`);
+  }
   await writeFile(
     lockPath,
-    `${JSON.stringify(
-      {
-        version: 1,
-        sourceLocale,
-        targets: nextHashes,
-      },
-      null,
-      2,
-    )}\n`,
+    `${JSON.stringify({
+      version: 1,
+      sourceLocale,
+      targets: Object.fromEntries(Object.keys(targets).map((locale) => [locale, hashes])),
+    }, null, 2)}\n`,
     "utf8",
   );
-
-  console.log(
-    `i18n sync complete: ${sourceKeys.length} messages, ${translatedCount} translations requested.`,
-  );
+  console.log("Reviewed translations approved. Run bun run i18n:check.");
 }
 
 const command = process.argv[2];
@@ -344,6 +360,8 @@ if (command === "check") {
   await check();
 } else if (command === "sync") {
   await sync();
+} else if (command === "approve") {
+  await approve();
 } else {
-  throw new Error("Usage: node scripts/i18n.mjs <sync|check>");
+  throw new Error("Usage: node scripts/i18n.mjs <sync|check|approve>");
 }

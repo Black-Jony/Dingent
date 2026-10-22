@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
-import { Check, Languages } from "lucide-react";
+import { Check, ChevronDown, Languages } from "lucide-react";
 
 import { setUserLocale } from "@/app/actions/locale";
 import { type AppLocale, locales } from "@/i18n/config";
@@ -19,10 +19,30 @@ import {
 const localeLabels: Record<AppLocale, string> = {
   en: "English",
   "zh-CN": "简体中文",
+  fr: "Français",
   ja: "日本語",
+  ru: "Русский",
+  ar: "العربية",
+  es: "Español",
 };
 
-export function LanguageSwitch() {
+const localeShortLabels: Record<AppLocale, string> = {
+  en: "EN",
+  "zh-CN": "中文",
+  fr: "FR",
+  ja: "日本語",
+  ru: "RU",
+  ar: "عربي",
+  es: "ES",
+};
+
+export function LanguageSwitch({
+  showLabel = false,
+  className,
+}: {
+  showLabel?: boolean;
+  className?: string;
+}) {
   const locale = useLocale() as AppLocale;
   const t = useTranslations("LanguageSwitch");
   const router = useRouter();
@@ -42,13 +62,27 @@ export function LanguageSwitch() {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          className="rounded-full"
+          size={showLabel ? "sm" : "icon"}
+          className={cn(showLabel ? "h-9 gap-1.5" : "rounded-full", className)}
           aria-label={t("label")}
           title={t("label")}
           disabled={isPending}
         >
           <Languages className="size-[1.2rem]" aria-hidden="true" />
+          {showLabel && (
+            <>
+              <span
+                className="hidden max-w-28 truncate sm:inline"
+                lang={locale}
+              >
+                {localeLabels[locale]}
+              </span>
+              <span className="sm:hidden" lang={locale}>
+                {localeShortLabels[locale]}
+              </span>
+              <ChevronDown className="size-3.5" aria-hidden="true" />
+            </>
+          )}
           <span className="sr-only">{t("label")}</span>
         </Button>
       </DropdownMenuTrigger>

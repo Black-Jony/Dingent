@@ -29,6 +29,7 @@ import { SettingsDialog } from "./settings-dialog";
 import { Workspace } from "@/types/entity";
 import { useWorkspaceApi } from "@/hooks/use-workspace-api";
 import { useTranslations } from "next-intl";
+import { SignOutDialog } from "../common/sign-out-dialog";
 
 // 定义 User 类型
 type UserData = {
@@ -53,6 +54,7 @@ export function WorkspaceSwitcher({
   const activeWorkspace = workspaces.find((w) => w.slug === slug);
   const activeName = activeWorkspace?.name || slug || t("select");
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const [isSignOutOpen, setIsSignOutOpen] = React.useState(false);
   const [settingsDefaultTab, setSettingsDefaultTab] = React.useState("general");
   const openSettings = (tab = "general") => {
     setSettingsDefaultTab(tab);
@@ -67,11 +69,10 @@ export function WorkspaceSwitcher({
   const pathname = usePathname();
 
   const handleSwitch = (workspaceSlug: string) => {
-    const newPath = pathname.replace(
-      new RegExp(`^/${slug}`),
-      `/${workspaceSlug}`,
-    );
-    router.push(newPath);
+    const segments = pathname.split("/");
+    if (segments[1] !== slug) return;
+    segments[1] = workspaceSlug;
+    router.push(segments.join("/"));
   };
 
   // 工作区 Logo 的通用样式
@@ -202,7 +203,7 @@ export function WorkspaceSwitcher({
             {/* === 第三部分：底部操作 === */}
             {/* Notion 的底部通常是登出，或者添加其他账号 */}
             <DropdownMenuItem
-              onClick={() => console.log("Logout")}
+              onClick={() => setIsSignOutOpen(true)}
               className="gap-2 p-2 text-muted-foreground focus:text-foreground"
             >
               <div className="flex size-6 items-center justify-center">
@@ -217,7 +218,9 @@ export function WorkspaceSwitcher({
           onOpenChange={setIsSettingsOpen}
           defaultTab={settingsDefaultTab}
           workspace={activeWorkspace}
+          user={user}
         />
+        <SignOutDialog open={isSignOutOpen} onOpenChange={setIsSignOutOpen} />
 
         <CreateWorkspaceDialog
           api={workspacesApi}

@@ -1,5 +1,7 @@
 "use client";
 import { useTranslations } from "next-intl";
+import type { AuthUser } from "@/types/entity";
+import { getClientApi } from "@/lib/api/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useAuthStore } from "@/store";
@@ -15,17 +17,21 @@ import { PageContainer } from "@/components/common/page-container";
 export default function PluginsPage() {
   const t = useTranslations("Plugins");
   const common = useTranslations("Common");
-  const { api: wsApi } = useWorkspaceApi();
+  const { api: wsApi, slug } = useWorkspaceApi();
   const queryClient = useQueryClient();
   const auth = useAuthStore();
-  const isAdmin = auth.user?.role.includes("admin");
+  const { data: currentUser } = useQuery<AuthUser>({
+    queryKey: ["current-user"],
+    queryFn: () => getClientApi().auth.getMe(),
+  });
+  const isAdmin = (currentUser ?? auth.user)?.role.includes("admin");
 
   const {
     data: plugins,
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["available-plugins"],
+    queryKey: ["available-plugins", slug],
     queryFn: async () => (await wsApi.plugins.list()) ?? [],
   });
 

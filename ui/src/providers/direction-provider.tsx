@@ -2,48 +2,62 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import { DirectionProvider as RdxDirProvider } from "@radix-ui/react-direction";
-import { getCookie, setCookie, removeCookie } from "@/lib/cookies";
+import { useLocale } from "next-intl";
+import { setCookie, removeCookie } from "@/lib/cookies";
+import {
+  directionCookieName,
+  resolveDirection,
+  type Direction,
+  type DirectionPreference,
+} from "@/i18n/direction";
 
-export type Direction = "ltr" | "rtl";
-
-const DEFAULT_DIRECTION = "ltr";
-const DIRECTION_COOKIE_NAME = "dir";
 const DIRECTION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
 
 type DirectionContextType = {
   defaultDir: Direction;
   dir: Direction;
-  setDir: (dir: Direction) => void;
+  preference: DirectionPreference;
+  setDir: (preference: DirectionPreference) => void;
   resetDir: () => void;
 };
 
 const DirectionContext = createContext<DirectionContextType | null>(null);
 
-export function DirectionProvider({ children }: { children: React.ReactNode }) {
-  const [dir, _setDir] = useState<Direction>(
-    () => (getCookie(DIRECTION_COOKIE_NAME) as Direction) || DEFAULT_DIRECTION,
-  );
+export function DirectionProvider({
+  children,
+  initialPreference,
+}: {
+  children: React.ReactNode;
+  initialPreference: DirectionPreference;
+}) {
+  const locale = useLocale();
+  const defaultDir = resolveDirection("auto", locale);
+  const [preference, setPreference] = useState(initialPreference);
+  const dir = resolveDirection(preference, locale);
 
   useEffect(() => {
     const htmlElement = document.documentElement;
     htmlElement.setAttribute("dir", dir);
   }, [dir]);
 
-  const setDir = (dir: Direction) => {
-    _setDir(dir);
-    setCookie(DIRECTION_COOKIE_NAME, dir, DIRECTION_COOKIE_MAX_AGE);
+  const setDir = (value: DirectionPreference) => {
+    setPreference(value);
+    if (value === "auto") {
+      removeCookie(directionCookieName);
+    } else {
+      setCookie(directionCookieName, value, DIRECTION_COOKIE_MAX_AGE);
+    }
+    removeCookie("dir");
   };
 
-  const resetDir = () => {
-    _setDir(DEFAULT_DIRECTION);
-    removeCookie(DIRECTION_COOKIE_NAME);
-  };
+  const resetDir = () => setDir("auto");
 
   return (
     <DirectionContext
       value={{
-        defaultDir: DEFAULT_DIRECTION,
+        defaultDir,
         dir,
+        preference,
         setDir,
         resetDir,
       }}

@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
+import { cookies } from "next/headers";
+import {
+  directionCookieName,
+  parseDirectionPreference,
+  resolveDirection,
+} from "@/i18n/direction";
 
 import "./globals.css";
 import "@copilotkit/react-ui/v2/styles.css";
@@ -32,16 +38,19 @@ export default async function RootLayout({
   bodyClassName = "",
 }: RootLayoutProps) {
   const locale = await getLocale();
+  const preference = parseDirectionPreference(
+    (await cookies()).get(directionCookieName)?.value,
+  );
 
   return (
-    <html lang={locale}>
+    <html lang={locale} dir={resolveDirection(preference, locale)}>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased ${bodyClassName}`}
       >
         <StoreInitializer />
         <NextIntlClientProvider>
           <ThemeProvider>
-            <DirectionProvider>
+            <DirectionProvider initialPreference={preference}>
               {children}
               <Toaster richColors position="top-right" />
             </DirectionProvider>

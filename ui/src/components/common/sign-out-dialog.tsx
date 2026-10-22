@@ -1,6 +1,6 @@
 "use client";
 import { useAuthStore } from "@/store";
-import { getBaseUrl } from "@/lib/api/client";
+import { getBaseUrl, getClientApi } from "@/lib/api/client";
 import { ConfirmDialog } from "./confirm-dialog";
 import { useTranslations } from "next-intl";
 
@@ -13,9 +13,14 @@ export function SignOutDialog({ open, onOpenChange }: SignOutDialogProps) {
   const { logout } = useAuthStore();
   const t = useTranslations("SignOut");
 
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     logout();
-    window.location.href = `${getBaseUrl()}/auth/sso/logout`;
+    const config = await getClientApi()
+      .auth.getConfig()
+      .catch(() => null);
+    window.location.href = config?.sso_enabled
+      ? `${getBaseUrl()}/auth/sso/logout`
+      : "/dingent-resource/auth/login";
   };
 
   return (

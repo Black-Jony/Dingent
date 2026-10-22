@@ -160,4 +160,4 @@ def test_ding_langchain_messages_to_agui_preserves_handoff_messages():
     assert [message.role for message in agui_messages] == ["user", "tool", "assistant"]
     assert agui_messages[1].tool_call_id == "call_123"
     assert agui_messages[1].content == "Transferred to agent_b"
-    assert agui_messages[2].content == "<thinking>\n</thinking>\nAgent B final response"
+    assert agui_messages[2].content == "Agent B final response"

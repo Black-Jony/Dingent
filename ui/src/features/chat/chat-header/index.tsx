@@ -2,9 +2,12 @@ import React from "react";
 import { X } from "lucide-react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { getClientApi } from "@/lib/api/client";
+import { useAuthStore } from "@/store";
 import { WorkflowSelector } from "./workflow-selector";
 import { WorkflowDetails } from "./workflow-details";
 import { useTranslations } from "next-intl";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { LanguageSwitch } from "@/components/common/language-switch";
 import {
   useActiveWorkflow,
   useWorkflowsList,
@@ -20,14 +23,19 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   onClose,
 }) => {
   const common = useTranslations("Common");
+  const chat = useTranslations("Chat");
   const params = useParams();
   const slug = params.slug as string;
   const pathname = usePathname();
   const isEmbedded = useSearchParams().get("embed") === "1";
-  const hideWorkflowSelector = isEmbedded || pathname.startsWith("/guest/");
-  const api = getClientApi().forWorkspace(slug);
+  const isGuest = pathname.startsWith("/guest/");
+  const hideWorkflowSelector = isEmbedded || isGuest;
+  const visitorId = useAuthStore((state) => state.visitorId);
+  const api = getClientApi().forWorkspace(slug, {
+    isGuest,
+    visitorId: isGuest ? (visitorId ?? undefined) : undefined,
+  });
 
-  // 数据获取
   const workflowsQ = useWorkflowsList(api.workflows, slug);
   const {
     id: activeId,
@@ -35,57 +43,44 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
     workflow,
   } = useActiveWorkflow(api.workflows, slug);
   const workflows = workflowsQ.data || [];
-  const showTopBar = !hideWorkflowSelector || Boolean(onClose);
-  const showDescription = Boolean(workflow?.description);
-
-  if (!showTopBar && !showDescription) return null;
-
   return (
     <header
-      className={`
-      flex flex-col w-full z-40
-      bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800
-      ${className}
-    `}
+      className={`z-40 flex h-14 w-full shrink-0 items-center border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80 ${className}`}
     >
-      {/* 顶部栏 */}
-      {showTopBar && (
-        <div className="flex items-center justify-between px-4 h-16 w-full max-w-7xl mx-auto">
-          {/* 左侧：选择器 */}
-          <div className="flex-1 flex items-center min-w-0">
-            {!hideWorkflowSelector && (
-              <WorkflowSelector
-                workflows={workflows}
-                activeId={activeId}
-                setActiveId={setActiveId}
-                isLoading={workflowsQ.isLoading}
-              />
-            )}
-          </div>
-
-          {/* 右侧：操作区 */}
-          <div className="flex items-center gap-2">
-            {onClose && (
-              <button
-                onClick={onClose}
-                className="flex items-center justify-center w-8 h-8 rounded-full text-neutral-500 hover:bg-neutral-800 hover:text-neutral-200 transition-all active:scale-95"
-                aria-label={common("close")}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
+      <div className="flex w-full min-w-0 items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <SidebarTrigger className="md:hidden" />
+          <div className="min-w-0 truncate text-sm font-semibold">
+            {chat("copilot.title")}
           </div>
         </div>
-      )}
 
-      {/* 底部扩展区域：描述信息 */}
-      {showDescription && (
-        <div
-          className={`px-4 pb-3 ${showTopBar ? "-mt-2" : "pt-3"} max-w-7xl mx-auto w-full`}
-        >
-          <WorkflowDetails description={workflow!.description!} />
+        <div className="flex min-w-0 items-center gap-1.5">
+          {!hideWorkflowSelector && workflow?.description && (
+            <WorkflowDetails description={workflow.description} />
+          )}
+          <LanguageSwitch showLabel />
+          {!hideWorkflowSelector && (
+            <WorkflowSelector
+              workflows={workflows}
+              activeId={activeId}
+              setActiveId={setActiveId}
+              isLoading={workflowsQ.isLoading}
+            />
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label={common("close")}
+              title={common("close")}
+            >
+              <X className="size-4" />
+            </button>
+          )}
         </div>
-      )}
+      </div>
     </header>
   );
 };

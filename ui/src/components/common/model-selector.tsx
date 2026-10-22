@@ -51,7 +51,7 @@ export function ModelSelector({
   const selectedModel = models.find((m) => m.id === selectedValue);
 
   const handleSelect = (modelId: string) => {
-    const newValue = selectedValue === modelId ? null : modelId;
+    const newValue = allowClear && selectedValue === modelId ? null : modelId;
     setSelectedValue(newValue);
     onChange(newValue);
     setOpen(false);
@@ -64,23 +64,25 @@ export function ModelSelector({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between"
+          className="w-full min-w-0 justify-between"
           disabled={disabled}
         >
           {selectedModel ? (
-            <span className="flex items-center gap-2">
-              <span className="font-medium">{selectedModel.name}</span>
-              <span className="text-xs text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate font-medium">{selectedModel.name}</span>
+              <span className="hidden truncate text-xs text-muted-foreground sm:inline">
                 ({selectedModel.provider}/{selectedModel.model})
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground">{displayPlaceholder}</span>
+            <span className="truncate text-muted-foreground">
+              {displayPlaceholder}
+            </span>
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full p-0">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] max-w-[calc(100vw-2rem)] p-0">
         <Command>
           <CommandInput placeholder={t("searchModels")} />
           <CommandList>
@@ -111,6 +113,7 @@ export function ModelSelector({
                   <CommandItem
                     key={model.id}
                     value={model.id}
+                    keywords={[model.name, model.provider, model.model]}
                     onSelect={() => handleSelect(model.id)}
                   >
                     <Check

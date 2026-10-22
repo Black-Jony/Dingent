@@ -8,13 +8,18 @@ import {
   memo,
   useDeferredValue,
   useEffect,
+  useLayoutEffect,
+  useRef,
+  useId,
   useMemo,
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { ColumnDef } from "@tanstack/react-table";
 import remarkGfm from "remark-gfm";
 import ReactMarkdown from "react-markdown";
+import { transformMarkdownUrl } from "@/lib/safe-urls";
 import {
   AlertCircle,
   ArrowUpDown,
@@ -22,6 +27,7 @@ import {
   ChevronDown,
   ChevronUp,
   ListTodo,
+  Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "./A2UI/data-table";
@@ -29,6 +35,7 @@ import { ErrorBoundary } from "react-error-boundary";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 import { useTranslations } from "next-intl";
+import { useAnalysisWorkspaceOptional } from "@/features/chat/shared/AnalysisWorkspace";
 
 type ReactActivityMessageRenderer<TContent = any> = {
   activityType: string;
@@ -92,6 +99,89 @@ interface LegacyDisplayContent {
     species_filter?: string;
   };
   data?: { mode?: string };
+}
+
+function getArtifactTitle(content: any, fallback: string): string {
+  if (Array.isArray(content)) return fallback;
+  if (!content || typeof content !== "object") return fallback;
+
+  const title =
+    content.title ??
+    content.summary?.trait_name ??
+    content.association_table?.title ??
+    content.species_overview?.association_table?.title;
+
+  return typeof title === "string" && title.trim() ? title : fallback;
+}
+
+function AnalysisArtifactSurface({
+  artifactKey,
+  children,
+  content,
+}: {
+  artifactKey?: string;
+  children: ReactNode;
+  content: any;
+}) {
+  const workspace = useAnalysisWorkspaceOptional();
+  const t = useTranslations("Chat.analysisWorkspace");
+  const title = getArtifactTitle(content, t("results"));
+  const generatedId = useId();
+  const artifactId = artifactKey || generatedId;
+  const isExpanded = workspace?.artifact?.id === artifactId;
+  const inlineTarget = useRef<HTMLDivElement>(null);
+  const [contentHost, setContentHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const host = document.createElement("div");
+    host.className = "min-w-0";
+    setContentHost(host);
+  }, []);
+  const target = isExpanded ? workspace?.portalTarget : inlineTarget.current;
+  useLayoutEffect(() => {
+    const destination = target ?? inlineTarget.current;
+    if (!contentHost || !destination) return;
+    // Keep a stable portal host so expanding does not reset table/chart state.
+    destination.appendChild(contentHost);
+    return () => {
+      contentHost.remove();
+    };
+  }, [contentHost, target]);
+
+  return (
+    <section
+      data-analysis-artifact
+      className="group/analysis-result relative my-4 min-w-0 rounded-md border bg-background p-3 shadow-sm"
+    >
+      {workspace && (
+        <div className="mb-2 flex min-h-8 items-center justify-between gap-3">
+          {isExpanded && (
+            <span className="min-w-0 truncate text-sm font-medium">
+              {title}
+            </span>
+          )}
+          {!isExpanded && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="ml-auto size-8 rounded-md text-muted-foreground hover:text-foreground"
+              aria-label={t("expand")}
+              title={t("expand")}
+              onClick={() => workspace.openArtifact({ id: artifactId, title })}
+            >
+              <Maximize2 className="size-4" />
+            </Button>
+          )}
+        </div>
+      )}
+      <div
+        ref={inlineTarget}
+        hidden={isExpanded}
+        className="min-w-0 overflow-x-auto"
+      />
+      {contentHost && createPortal(children, contentHost)}
+    </section>
+  );
 }
 
 function normalizeTableContent(content: TableContent): TableContent {
@@ -215,7 +305,8 @@ function TableView({ data }: { data: TableContent }) {
       if (!rawColumns || !Array.isArray(rawColumns)) return [];
 
       return rawColumns.map((colName) => ({
-        accessorKey: colName,
+        id: colName,
+        accessorFn: (row) => row[colName],
         header: ({ column }) => (
           <Button
             variant="ghost"
@@ -363,7 +454,7 @@ function LegacyDisplayView({ content }: { content: LegacyDisplayContent }) {
               <img
                 src={imageSrc}
                 alt={title || t("sankeyDiagram")}
-                className="max-w-full h-auto rounded border cursor-zoom-in"
+                className="mx-auto block h-auto w-auto max-w-full cursor-zoom-in rounded border object-contain"
               />
             </PhotoView>
           </PhotoProvider>
@@ -402,7 +493,7 @@ const PreviewImage = (props: any) => {
         title={title}
         {...rest}
         // cursor-zoom-in 提示用户可点击
-        className="rounded-lg border border-slate-200 dark:border-slate-800 shadow-sm my-4 max-w-full h-auto object-cover cursor-zoom-in hover:opacity-95 transition-opacity"
+        className="mx-auto my-4 block h-auto w-auto max-w-full cursor-zoom-in rounded-lg border border-slate-200 object-contain shadow-sm transition-opacity hover:opacity-95 dark:border-slate-800"
         loading="lazy"
       />
     </PhotoView>
@@ -444,7 +535,7 @@ const MarkdownView = memo(
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 className="prose prose-sm dark:prose-invert max-w-none break-words"
-                urlTransform={(value) => value}
+                urlTransform={transformMarkdownUrl}
                 components={{
                   a: ({ node, ...props }) => (
                     <a
@@ -644,12 +735,21 @@ export function createA2UIMessageRenderer(
     activityType: "a2ui-surface",
     content: z.any() as any,
 
-    render: ({ content }) => {
+    render: ({ content, message }) => {
       // 2. 根据 type 分发渲染逻辑
       // 使用 ErrorBoundary 包裹整个动态内容，确保任意组件崩溃不影响聊天主界面
       return (
         <ErrorBoundary FallbackComponent={ErrorFallback}>
-          {renderContent(content)}
+          <AnalysisArtifactSurface
+            artifactKey={
+              typeof message?.id === "string"
+                ? `analysis-${message.id}`
+                : undefined
+            }
+            content={content}
+          >
+            {renderContent(content)}
+          </AnalysisArtifactSurface>
         </ErrorBoundary>
       );
     },

@@ -31,6 +31,17 @@ import { useWorkspaceApi } from "@/hooks/use-workspace-api";
 import { toast } from "sonner";
 import { Workspace } from "@/types/entity";
 import { useTranslations } from "next-intl";
+import NextLink from "next/link";
+import { useRouter } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { getClientApi } from "@/lib/api/client";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 
 // 动态导入组件
 const ModelSelector = React.lazy(() =>
@@ -43,7 +54,8 @@ interface SettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   defaultTab?: string;
-  workspace: Workspace;
+  workspace?: Workspace;
+  user?: { name: string; email: string };
 }
 
 export function SettingsDialog({
@@ -51,6 +63,7 @@ export function SettingsDialog({
   onOpenChange,
   defaultTab = "people",
   workspace,
+  user,
 }: SettingsDialogProps) {
   const t = useTranslations("Settings");
   const [activeTab, setActiveTab] = React.useState(defaultTab);
@@ -92,19 +105,21 @@ export function SettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="!max-w-none w-[90vw] h-[85vh] p-0 gap-0 overflow-hidden flex bg-background sm:rounded-xl">
+      <DialogContent className="!max-w-none w-[95vw] sm:w-[90vw] h-[85dvh] p-0 gap-0 overflow-hidden flex flex-col md:flex-row bg-background sm:rounded-lg">
         <DialogTitle className="sr-only">{t("dialogTitle")}</DialogTitle>
         <DialogDescription className="sr-only">
           {t("dialogDescription")}
         </DialogDescription>
 
         {/* === 左侧侧边栏 === */}
-        <div className="w-64 bg-muted/30 border-r flex flex-col h-full shrink-0">
+        <div className="hidden md:flex w-56 bg-muted/30 border-e flex-col h-full shrink-0">
           <div className="p-4 text-sm font-medium text-muted-foreground flex items-center gap-2">
             <div className="size-6 bg-primary/10 rounded-full flex items-center justify-center text-xs">
-              S
+              {user?.name?.charAt(0).toUpperCase() || (
+                <User className="size-4" />
+              )}
             </div>
-            <span className="truncate">user@example.com</span>
+            <span className="truncate">{user?.email || workspace?.name}</span>
           </div>
 
           <ScrollArea className="flex-1 px-2">
@@ -137,6 +152,7 @@ export function SettingsDialog({
 
           <div className="p-4 border-t">
             <Button
+              disabled
               variant="outline"
               className="w-full justify-start gap-2 text-blue-600 border-blue-200 hover:bg-blue-50"
             >
@@ -148,12 +164,29 @@ export function SettingsDialog({
           </div>
         </div>
 
+        <div className="border-b p-3 pe-12 md:hidden">
+          <Select value={activeTab} onValueChange={setActiveTab}>
+            <SelectTrigger aria-label={t("dialogTitle")} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sidebarNavItems
+                .flatMap((group) => group.items)
+                .map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.title}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* === 右侧内容区 === */}
-        <div className="flex-1 flex flex-col h-full overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 flex flex-col overflow-hidden">
           {activeTab === "general" ? (
-            <GeneralSettingsContent workspace={workspace} />
+            <GeneralSettingsContent key={workspace?.id} workspace={workspace} />
           ) : activeTab === "people" ? (
-            <PeopleSettingsContent />
+            <PeopleSettingsContent user={user} workspace={workspace} />
           ) : (
             <div className="p-8 flex items-center justify-center h-full text-muted-foreground">
               {t("contentUnavailable", { tab: activeTabTitle })}
@@ -166,40 +199,33 @@ export function SettingsDialog({
 }
 
 interface GeneralSettingsContentProps {
-  workspace: Workspace;
+  workspace?: Workspace;
 }
 
 function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
   const t = useTranslations("Settings");
+  const router = useRouter();
   const { workspacesApi } = useWorkspaceApi();
-  const [guestAccessEnabled, setGuestAccessEnabled] = React.useState(false);
+  const [guestAccessEnabled, setGuestAccessEnabled] = React.useState(
+    workspace?.allow_guest_access ?? false,
+  );
   const [isUpdating, setIsUpdating] = React.useState(false);
 
   // 表单状态
-  const [workspaceName, setWorkspaceName] = React.useState("");
-  const [workspaceDescription, setWorkspaceDescription] = React.useState("");
+  const [workspaceName, setWorkspaceName] = React.useState(
+    workspace?.name ?? "",
+  );
+  const [workspaceDescription, setWorkspaceDescription] = React.useState(
+    workspace?.description ?? "",
+  );
   const [defaultModelConfigId, setDefaultModelConfigId] = React.useState<
     string | null
-  >(null);
-  const [availableModels, setAvailableModels] = React.useState<any[]>([]);
-
-  // 初始化数据
-  React.useEffect(() => {
-    if (workspace) {
-      setGuestAccessEnabled(workspace.allow_guest_access ?? false);
-      setWorkspaceName(workspace.name);
-      setWorkspaceDescription(workspace.description ?? "");
-      setDefaultModelConfigId(workspace.default_model_config_id || null);
-
-      import("@/lib/api/client").then(({ getClientApi }) => {
-        getClientApi()
-          .forWorkspace(workspace.slug)
-          .models.list()
-          .then((models) => setAvailableModels(models || []))
-          .catch((err) => console.error("Failed to load models:", err));
-      });
-    }
-  }, [workspace]);
+  >(workspace?.default_model_config_id ?? null);
+  const { data: availableModels = [] } = useQuery({
+    queryKey: ["models", workspace?.slug],
+    enabled: !!workspace,
+    queryFn: () => getClientApi().forWorkspace(workspace!.slug).models.list(),
+  });
 
   const guestLink = React.useMemo(() => {
     if (!workspace) return "";
@@ -215,6 +241,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         allow_guest_access: enabled,
       });
       setGuestAccessEnabled(enabled);
+      router.refresh();
       toast.success(
         enabled ? t("toast.guestEnabled") : t("toast.guestDisabled"),
       );
@@ -247,6 +274,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         default_model_config_id: defaultModelConfigId,
       });
       toast.success(t("toast.workspaceUpdated"));
+      router.refresh();
     } catch (error) {
       console.error("Failed to update workspace:", error);
       toast.error(t("toast.workspaceUpdateFailed"));
@@ -265,7 +293,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-8 pt-8 pb-4">
+      <div className="px-4 pt-6 pb-4 sm:px-8 sm:pt-8">
         <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
           {t("general.title")}
           <span className="text-muted-foreground cursor-help text-xs border rounded-full size-4 flex items-center justify-center">
@@ -277,7 +305,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
         </p>
       </div>
 
-      <ScrollArea className="flex-1 px-8 pb-8">
+      <ScrollArea className="min-h-0 flex-1 px-4 pb-6 sm:px-8 sm:pb-8">
         <div className="space-y-8 max-w-2xl">
           {/* === Basic Information === */}
           <div className="space-y-4">
@@ -342,12 +370,12 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                   ) : (
                     <div className="text-sm text-muted-foreground">
                       {t("general.noModels")}{" "}
-                      <a
+                      <NextLink
                         href={`/${workspace.slug}/models`}
                         className="text-primary underline"
                       >
                         {t("general.configureModels")}
-                      </a>{" "}
+                      </NextLink>{" "}
                       {t("general.first")}
                     </div>
                   )}
@@ -360,7 +388,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
           <div className="pt-6">
             <Button
               onClick={handleSaveAllChanges}
-              disabled={isUpdating}
+              disabled={isUpdating || !workspaceName.trim()}
               size="sm"
             >
               {t("general.saveAll")}
@@ -369,7 +397,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
 
           {/* === Guest Access Section === */}
           <div className="space-y-4 pt-6 border-t">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Globe className="size-4" />
@@ -387,7 +415,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
             </div>
 
             {guestAccessEnabled && (
-              <div className="space-y-3 pl-6 pt-2">
+              <div className="space-y-3 pt-2 sm:ps-6">
                 <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
                   <div className="flex items-center gap-2">
                     <ExternalLink className="size-4 text-muted-foreground" />
@@ -399,7 +427,7 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
                     <Input
                       value={guestLink}
                       readOnly
-                      className="font-mono text-xs flex-1"
+                      className="min-w-0 font-mono text-xs flex-1"
                       aria-label={t("general.guestLinkAria")}
                     />
                     <Button
@@ -435,11 +463,14 @@ function GeneralSettingsContent({ workspace }: GeneralSettingsContentProps) {
 }
 
 // PeopleSettingsContent 保持不变
-function PeopleSettingsContent() {
+function PeopleSettingsContent({
+  user,
+  workspace,
+}: Pick<SettingsDialogProps, "user" | "workspace">) {
   const t = useTranslations("Settings");
   return (
     <div className="flex flex-col h-full">
-      <div className="px-8 pt-8 pb-4">
+      <div className="px-4 pt-6 pb-4 sm:px-8 sm:pt-8">
         <h2 className="text-xl font-semibold mb-1 flex items-center gap-2">
           {t("people.title")}
           <span className="text-muted-foreground cursor-help text-xs border rounded-full size-4 flex items-center justify-center">
@@ -448,26 +479,31 @@ function PeopleSettingsContent() {
         </h2>
       </div>
 
-      <ScrollArea className="flex-1 px-8 pb-8">
+      <ScrollArea className="min-h-0 flex-1 px-4 pb-6 sm:px-8 sm:pb-8">
         <div className="mb-8">
           <div className="text-sm font-medium mb-2">
             {t("people.inviteLink")}
           </div>
-          <div className="flex items-center justify-between p-3 border rounded-md bg-card">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 border rounded-md bg-card">
             <div className="text-xs text-muted-foreground">
               {t("people.invitePermission")}
             </div>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="sm" className="h-7 text-xs">
+              <Button
+                disabled
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs"
+              >
                 {t("people.copyLink")}
               </Button>
-              <Switch defaultChecked />
+              <Switch disabled />
             </div>
           </div>
         </div>
 
         <Tabs defaultValue="members" className="w-full">
-          <div className="flex items-center justify-between mb-4 border-b">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4 border-b">
             <TabsList className="h-auto p-0 bg-transparent gap-6">
               <TabsTrigger
                 value="guests"
@@ -495,7 +531,11 @@ function PeopleSettingsContent() {
                 placeholder={t("people.filterPlaceholder")}
                 className="h-8 w-[150px] lg:w-[200px]"
               />
-              <Button size="sm" className="h-8 bg-blue-600 hover:bg-blue-700">
+              <Button
+                disabled
+                size="sm"
+                className="h-8 bg-blue-600 hover:bg-blue-700"
+              >
                 {t("people.addMembers")}
               </Button>
             </div>
@@ -503,27 +543,31 @@ function PeopleSettingsContent() {
 
           <TabsContent value="members" className="mt-0">
             <div className="space-y-1">
-              <div className="flex items-center justify-between py-3 border-b border-border/50 group hover:bg-muted/30 px-2 -mx-2 rounded">
-                <div className="flex items-center gap-3">
-                  <div className="size-8 rounded-full bg-red-100 flex items-center justify-center text-red-600">
-                    S
+              {user && (
+                <div className="flex items-center justify-between py-3 border-b border-border/50 group hover:bg-muted/30 px-2 -mx-2 rounded">
+                  <div className="flex items-center gap-3">
+                    <div className="size-8 rounded-full bg-red-100 flex items-center justify-center text-red-600">
+                      {user.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="text-sm font-medium">
+                        {user.name}{" "}
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          ({t("people.you")})
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {user.email}
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-sm font-medium">
-                      Saya&apos;s Notion{" "}
-                      <span className="ml-2 text-xs text-muted-foreground">
-                        ({t("people.you")})
-                      </span>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      c3313433633@gmail.com
-                    </div>
+                  <div className="text-xs text-muted-foreground">
+                    {workspace?.role === "owner"
+                      ? t("people.workspaceOwner")
+                      : ""}
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {t("people.workspaceOwner")}
-                </div>
-              </div>
+              )}
             </div>
           </TabsContent>
 

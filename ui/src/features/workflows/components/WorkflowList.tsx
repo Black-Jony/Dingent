@@ -30,7 +30,7 @@ export function WorkflowList({
   models?: LLMModelConfig[];
   onSelect: (workflow: WorkflowSummary) => void;
   onDelete: (workflowId: string) => void;
-  onUpdateWorkflow?: (workflowId: string, updates: any) => void;
+  onUpdateWorkflow?: (workflowId: string, updates: any) => Promise<unknown>;
   isUpdating?: boolean;
 }) {
   const t = useTranslations("Workflows");
@@ -77,7 +77,7 @@ export function WorkflowList({
                         models={models}
                         // 修复点 1: TypeScript 安全调用
                         onSave={(updates) =>
-                          onUpdateWorkflow?.(workflow.id, updates)
+                          onUpdateWorkflow(workflow.id, updates)
                         }
                         isSaving={isUpdating || false}
                       />

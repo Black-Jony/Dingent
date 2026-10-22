@@ -11,17 +11,30 @@ from langchain.tools import BaseTool, InjectedToolCallId, tool
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, AnyMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_litellm.chat_models import litellm as langchain_litellm_chat_models
+from langgraph.config import get_config
 from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Command
 from loguru import logger
 
 from .messages import ActivityMessage
+from .response_language import normalize_response_locale, with_response_language, with_response_language_hint
 
 _ORIGINAL_CONVERT_MESSAGE_TO_DICT = langchain_litellm_chat_models._convert_message_to_dict
 
 
 def _convert_message_to_dict_with_reasoning_content(message: AnyMessage) -> dict[str, Any]:
     message_dict = _ORIGINAL_CONVERT_MESSAGE_TO_DICT(message)
+    content = message_dict.get("content")
+    if (
+        isinstance(message, SystemMessage)
+        and isinstance(content, list)
+        and all(
+            isinstance(block, str) or (isinstance(block, dict) and block.get("type") == "text" and isinstance(block.get("text"), str) and set(block) <= {"type", "text"})
+            for block in content
+        )
+    ):
+        # Some OpenAI-compatible endpoints ignore system instructions supplied as text blocks.
+        message_dict["content"] = "\n\n".join(block if isinstance(block, str) else block["text"] for block in content)
     reasoning_content = message.additional_kwargs.get("reasoning_content") if isinstance(message, AIMessage) else None
     if reasoning_content and "reasoning_content" not in message_dict:
         message_dict["reasoning_content"] = reasoning_content
@@ -32,20 +45,105 @@ langchain_litellm_chat_models._convert_message_to_dict = _convert_message_to_dic
 
 
 def _format_table_value(value: Any) -> str:
+    if value is None:
+        return ""
     if isinstance(value, (dict, list)):
         return json.dumps(value, ensure_ascii=False, default=str)
     return str(value)
 
 
 def _plain_object_to_table_display(data: dict[str, Any]) -> list[dict[str, Any]]:
-    return [
-        {
-            "type": "table",
-            "title": "Results",
-            "columns": ["Property", "Value"],
-            "rows": [[str(key), _format_table_value(value)] for key, value in data.items()],
-        }
-    ]
+    displays: list[dict[str, Any]] = []
+    remaining_items: list[tuple[str, Any]] = []
+
+    for key, value in data.items():
+        if isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
+            columns = list(dict.fromkeys(str(column) for item in value for column in item))
+            displays.append(
+                {
+                    "type": "table",
+                    "title": str(key).replace("_", " ").title(),
+                    "columns": columns,
+                    "rows": [[_format_table_value(item.get(column)) for column in columns] for item in value],
+                }
+            )
+        else:
+            remaining_items.append((str(key), value))
+
+    if remaining_items or not displays:
+        displays.append(
+            {
+                "type": "table",
+                "title": "Results",
+                "columns": ["Property", "Value"],
+                "rows": [[key, _format_table_value(value)] for key, value in remaining_items],
+            }
+        )
+
+    return displays
+
+
+def _structured_data_model_text(data: dict[str, Any], limit: int = 16000) -> str:
+    lines: list[str] = []
+    remaining = limit
+
+    def append_line(line: str) -> bool:
+        nonlocal remaining
+        separator_length = 1 if lines else 0
+        available = remaining - separator_length
+        if available <= 0:
+            return False
+        if len(line) > available:
+            clipped = line[:available]
+            if available >= 3:
+                clipped = f"{line[: available - 3]}..."
+            lines.append(clipped)
+            remaining = 0
+            return False
+        lines.append(line)
+        remaining -= len(line) + separator_length
+        return True
+
+    for key, value in data.items():
+        if isinstance(value, list):
+            if not append_line(f"{key}: {len(value)} records"):
+                break
+            if value and all(isinstance(item, dict) for item in value):
+                for item in value:
+                    rendered = "; ".join(f"{item_key}={_format_table_value(item_value)}" for item_key, item_value in item.items())
+                    if not append_line(f"- {rendered}"):
+                        break
+            elif value:
+                append_line(f"- {_format_table_value(value)}")
+        elif isinstance(value, dict):
+            append_line(f"{key}: {_format_table_value(value)}")
+        else:
+            append_line(f"{key}: {_format_table_value(value)}")
+
+        if remaining <= 0:
+            break
+
+    return "\n".join(lines)
+
+
+def _is_generic_property_display(display: Any) -> bool:
+    if not isinstance(display, dict):
+        return False
+    table = display.get("association_table")
+    return isinstance(table, dict) and table.get("columns") == ["Property", "Value"]
+
+
+def _model_text_with_structured_data(model_text: Any, data: Any) -> Any:
+    if not isinstance(data, dict) or not data:
+        return model_text
+
+    summary = _structured_data_model_text(data)
+    existing = str(model_text or "").strip()
+    if not summary:
+        return existing
+    if len(existing) >= 1000:
+        return existing
+    return f"{existing}\n\nStructured result:\n{summary}".strip()
 
 
 def _parse_json_object(value: Any) -> dict[str, Any]:
@@ -250,6 +348,17 @@ class DingMiddleware(AgentMiddleware):
         )
         request = request.override(messages=filtered_messages, model_settings=model_settings)
         try:
+            response_locale = normalize_response_locale(get_config().get("configurable", {}).get("response_locale"))
+        except RuntimeError:
+            response_locale = None
+        if response_locale:
+            # Reinforce the selection for tool-enabled endpoints without changing stored messages.
+            for index in range(len(filtered_messages) - 1, -1, -1):
+                if isinstance(filtered_messages[index], HumanMessage):
+                    filtered_messages[index] = with_response_language_hint(filtered_messages[index], response_locale)
+                    break
+            request = request.override(messages=filtered_messages, system_message=with_response_language(request.system_message, response_locale))
+        try:
             result = await handler(request)
         except Exception:
             logger.exception("Agent model call failed: filtered_messages={}, message_types={}", len(filtered_messages), _message_type_counts(filtered_messages))
@@ -288,10 +397,14 @@ class DingMiddleware(AgentMiddleware):
                     display = data.get("display")
                     if isinstance(display, (dict, list)):
                         artifact = display
+                    payload = data.get("data")
                     model_text = data.get("model_text", content)
+                    if _is_generic_property_display(display) and isinstance(payload, dict):
+                        artifact = _plain_object_to_table_display(payload)
+                        model_text = _model_text_with_structured_data(model_text, payload)
                 elif isinstance(data, dict) and data and "model_text" not in data:
                     artifact = _plain_object_to_table_display(data)
-                    model_text = content
+                    model_text = _structured_data_model_text(data)
                 elif isinstance(data, dict) and "model_text" in data:
                     model_text = data.get("model_text", content)
                 else:

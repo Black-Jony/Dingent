@@ -9,6 +9,7 @@ services:
     environment:
       - PORT=8000
       - DINGENT_HOME=/app/data
+      - SECRET_KEY=${DINGENT_SECRET_KEY:?Set DINGENT_SECRET_KEY to a unique random signing key before deployment}
     volumes:
       - ./data:/app/data
     restart: unless-stopped

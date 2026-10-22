@@ -42,7 +42,7 @@ export default function ModelsPage() {
       action={
         <ModelConfigDialog
           isPending={createMutation.isPending}
-          onSave={createMutation.mutate}
+          onSave={createMutation.mutateAsync}
           onTestConnection={handleTestConnection}
         />
       }
@@ -65,7 +65,7 @@ export default function ModelsPage() {
       {!modelsQuery.isLoading && !modelsQuery.isError && (
         <ModelsTable
           models={modelsQuery.data || []}
-          onEdit={(id, data) => updateMutation.mutate({ id, data })}
+          onEdit={(id, data) => updateMutation.mutateAsync({ id, data })}
           onDelete={deleteMutation.mutate}
           onTestConnection={handleTestConnection}
           isUpdating={updateMutation.isPending}

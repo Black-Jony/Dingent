@@ -1,8 +1,4 @@
-import {
-  createHttpClient,
-  UnauthorizeHandler,
-  attachAuthInterceptor,
-} from "./http";
+import { createHttpClient, UnauthorizeHandler } from "./http";
 import type { ApiClientConfig } from "./config";
 import { AuthApi } from "./auth";
 import {
@@ -30,15 +26,12 @@ export class ApiClient {
   public auth: AuthApi;
   public workspaces: WorkspaceApi;
 
-  private onUnauthorized?: UnauthorizeHandler;
-
   constructor(
     config: ApiClientConfig,
     token?: string | null,
     xVisitorId?: string | null,
     on401?: UnauthorizeHandler,
   ) {
-    this.onUnauthorized = on401;
     this.http = createHttpClient(config, on401);
     this.auth = new AuthApi(this.http);
     this.workspaces = new WorkspaceApi(this.http, "/workspaces");
@@ -56,15 +49,10 @@ export class ApiClient {
     const isGuest = options?.isGuest;
 
     let clientHttp = this.http;
-    if (isGuest) {
+    if (isGuest || visitorId) {
       clientHttp = this.http.create();
-      attachAuthInterceptor(clientHttp, this.onUnauthorized);
-
-      clientHttp.interceptors.request.use((config: any) => {
-        config.headers = config.headers || {};
-        config.headers["X-Visitor-ID"] = visitorId;
-        return config;
-      });
+      delete clientHttp.defaults.headers.common["Authorization"];
+      clientHttp.defaults.headers.common["X-Visitor-ID"] = visitorId;
     }
 
     return {
@@ -72,7 +60,7 @@ export class ApiClient {
 
       overview: new OverviewApi(this.http, `${wsPath}/overview`),
       assistants: new AssistantsApi(this.http, `${wsPath}/assistants`),
-      workflows: new WorkflowsApi(this.http, `${wsPath}/workflows`),
+      workflows: new WorkflowsApi(clientHttp, `${wsPath}/workflows`),
       plugins: new PluginsApi(this.http, `${wsPath}/plugins`),
       logs: new LogsApi(this.http, `${wsPath}/logs`),
       settings: new SettingsApi(this.http, `${wsPath}/settings`),

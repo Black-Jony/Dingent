@@ -1,0 +1,16 @@
+.git
+.gitnexus
+.venv
+**/__pycache__
+.pytest_cache
+data
+ui/node_modules
+ui/.next
+ui/test-results
+ui/playwright-report
+ui/.env*
+website/node_modules
+website/.next
+.env
+.env.*
+!.env.example

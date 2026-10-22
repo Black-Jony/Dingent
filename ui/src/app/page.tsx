@@ -1,21 +1,19 @@
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 import { redirect } from "next/navigation";
-import { getCookie } from "@/lib/cookies";
+import { cookies } from "next/headers";
 import { getServerApi } from "@/lib/api/server";
+import { WorkspaceEntry } from "@/components/common/workspace-entry";
 
 export default async function RootPage() {
-  const lastSlug = getCookie("last_workspace_slug");
-  if (lastSlug) {
-    redirect(`/${lastSlug}`);
-  }
+  const lastSlug = (await cookies()).get("last_workspace_slug")?.value;
   const api = await getServerApi();
 
   const workspaces = await api.workspaces.list();
-
-
   if (workspaces.length > 0) {
-    redirect(`/${workspaces[0]!.slug}`);
+    const workspace =
+      workspaces.find((item) => item.slug === lastSlug) ?? workspaces[0]!;
+    redirect(`/${workspace.slug}`);
   }
 
-  redirect("/onboarding");
+  return <WorkspaceEntry />;
 }

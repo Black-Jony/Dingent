@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Workflow } from "@/types/entity";
 import { useWorkflowStore } from "@/store/workflow";
@@ -10,7 +10,8 @@ export const workflowKeys = {
   lists: (workspaceId: string | undefined) =>
     [...workflowKeys.all, "list", workspaceId] as const,
   details: () => [...workflowKeys.all, "detail"] as const,
-  detail: (id: string) => [...workflowKeys.details(), id] as const,
+  detail: (workspaceId: string | undefined, id: string | null) =>
+    [...workflowKeys.details(), workspaceId, id] as const,
   assistants: (workspaceId: string | undefined) =>
     [...workflowKeys.all, "assistants", workspaceId] as const,
 };
@@ -34,8 +35,8 @@ export function useWorkflow(
   const queryClient = useQueryClient();
 
   return useQuery({
-    queryKey: workflowKeys.detail(id!),
-    enabled: !!id,
+    queryKey: workflowKeys.detail(workspaceId, id),
+    enabled: !!id && !!workspaceId,
     queryFn: async () => api.get(id!),
     placeholderData: () => {
       if (!workspaceId) return undefined;
@@ -62,7 +63,34 @@ export function useActiveWorkflow(
   api: WorkflowsApi,
   workspaceId: string | undefined,
 ) {
-  const { activeId, setActiveId } = useWorkflowStore();
+  const {
+    activeIds,
+    legacyActiveId,
+    setActiveId: updateActiveId,
+  } = useWorkflowStore();
+  const { data: workflows } = useWorkflowsList(api, workspaceId);
+  const selectedId = workspaceId ? (activeIds[workspaceId] ?? null) : null;
+  const legacyId =
+    !selectedId &&
+    legacyActiveId &&
+    workflows?.some((workflow) => workflow.id === legacyActiveId)
+      ? legacyActiveId
+      : null;
+  const activeId =
+    workflows && !workflows.some((workflow) => workflow.id === selectedId)
+      ? legacyId
+      : (selectedId ?? legacyId);
+  const setActiveId = useCallback(
+    (id: string | null) => {
+      if (workspaceId) updateActiveId(workspaceId, id);
+    },
+    [workspaceId, updateActiveId],
+  );
+  useEffect(() => {
+    if (!workspaceId || !workflows) return;
+    if (legacyId || (selectedId && activeId !== selectedId))
+      setActiveId(activeId);
+  }, [workspaceId, workflows, selectedId, legacyId, activeId, setActiveId]);
 
   const {
     data: workflow,
@@ -96,9 +124,9 @@ export function useApplyWorkflowFromUrl(
       (workflow) => workflow.name.toLowerCase() === workflowName.toLowerCase(),
     );
     if (matchedWorkflow) {
-      setActiveId(matchedWorkflow.id);
+      if (workspaceId) setActiveId(workspaceId, matchedWorkflow.id);
     }
-  }, [workflowName, workflows, setActiveId]);
+  }, [workflowName, workflows, setActiveId, workspaceId]);
 }
 
 // --- Mutations ---
@@ -128,10 +156,13 @@ export function useCreateWorkflow(
       });
 
       // 2. 写入详情缓存
-      queryClient.setQueryData(workflowKeys.detail(newWf.id), newWf);
+      queryClient.setQueryData(
+        workflowKeys.detail(workspaceId, newWf.id),
+        newWf,
+      );
 
       // 3. 自动设为当前选中
-      setActiveId(newWf.id);
+      if (workspaceId) setActiveId(workspaceId, newWf.id);
     },
   });
 }
@@ -152,7 +183,7 @@ export function useSaveWorkflow(
 
       if (savedWf?.id) {
         queryClient.invalidateQueries({
-          queryKey: workflowKeys.detail(savedWf.id),
+          queryKey: workflowKeys.detail(workspaceId, savedWf.id),
         });
       }
     },
@@ -164,7 +195,7 @@ export function useDeleteWorkflow(
   workspaceId: string | undefined,
 ) {
   const queryClient = useQueryClient();
-  const { activeId, setActiveId } = useWorkflowStore();
+  const { setActiveId } = useWorkflowStore();
 
   return useMutation({
     mutationFn: (id: string) => api.delete(id),
@@ -173,10 +204,15 @@ export function useDeleteWorkflow(
       queryClient.invalidateQueries({
         queryKey: workflowKeys.lists(workspaceId),
       });
-      queryClient.removeQueries({ queryKey: workflowKeys.detail(deletedId) });
+      queryClient.removeQueries({
+        queryKey: workflowKeys.detail(workspaceId, deletedId),
+      });
 
-      if (activeId === deletedId) {
-        setActiveId(null);
+      if (
+        workspaceId &&
+        useWorkflowStore.getState().activeIds[workspaceId] === deletedId
+      ) {
+        setActiveId(workspaceId, null);
       }
     },
   });

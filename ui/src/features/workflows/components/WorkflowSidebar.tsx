@@ -14,9 +14,12 @@ interface SidebarProps {
   models?: any[];
   selectedWorkflowId: string | null;
   onSelectWorkflow: (id: string | null) => void;
-  onCreateWorkflow: (input: { name: string; description?: string }) => void;
+  onCreateWorkflow: (input: {
+    name: string;
+    description?: string;
+  }) => Promise<unknown>;
   onDeleteWorkflow: (id: string) => void;
-  onUpdateWorkflow?: (id: string, updates: any) => void;
+  onUpdateWorkflow?: (id: string, updates: any) => Promise<unknown>;
   isUpdatingWorkflow?: boolean;
 }
 

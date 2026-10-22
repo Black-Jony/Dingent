@@ -108,6 +108,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
     older: t("sidebar.groups.older"),
   };
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const isCollapsed = !isMobile && isSidebarCollapsed;
   const [collapsedGroups, setCollapsedGroups] = useState<
     Partial<Record<ThreadGroupKey, boolean>>
   >({});
@@ -129,6 +130,14 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
     if (isMobile) setOpenMobile(false);
   };
 
+  const handleSidebarToggle = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+      return;
+    }
+    setIsSidebarCollapsed((collapsed) => !collapsed);
+  };
+
   const { slug } = useWorkspaceApi();
   const handleDeleteAll = () => {
     if (window.confirm(t("sidebar.clearConfirm"))) {
@@ -143,7 +152,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
     <AppSidebar
       workspaces={workspaces}
       isGuest={isGuestMode}
-      collapsed={isSidebarCollapsed}
+      collapsed={isCollapsed}
     >
       {/* --- 区域 1: 头部 --- */}
       <SidebarHeader className="p-3 pb-0">
@@ -152,25 +161,25 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
             <SidebarMenuButton
               size="lg"
               aria-label={
-                isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
+                isCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
               }
               title={
-                isSidebarCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
+                isCollapsed ? t("sidebar.expand") : t("sidebar.collapse")
               }
-              onClick={() => setIsSidebarCollapsed((collapsed) => !collapsed)}
+              onClick={handleSidebarToggle}
               className="h-10 border border-sidebar-border bg-sidebar shadow-sm hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
             >
-              {isSidebarCollapsed ? (
+              {isCollapsed ? (
                 <ChevronRight className="size-4" />
               ) : (
                 <ChevronLeft className="size-4" />
               )}
-              {!isSidebarCollapsed && (
+              {!isCollapsed && (
                 <span className="font-medium">{t("sidebar.collapse")}</span>
               )}
             </SidebarMenuButton>
           </SidebarMenuItem>
-          {!isSidebarCollapsed && (
+          {!isCollapsed && (
             <SidebarMenuItem>
               <SidebarMenuButton
                 size="lg"
@@ -186,7 +195,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
       </SidebarHeader>
 
       {/* --- 区域 2: 内容区 --- */}
-      {!isSidebarCollapsed && (
+      {!isCollapsed && (
         <SidebarContent className="px-2 scrollbar-thin scrollbar-thumb-sidebar-border scrollbar-track-transparent">
           {threads.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground/60">
@@ -275,7 +284,7 @@ export function ChatHistorySidebar({ workspaces }: ChatHistorySidebarProps) {
       )}
 
       {/* --- 区域 3: 底部 --- */}
-      {!isSidebarCollapsed && (
+      {!isCollapsed && (
         <SidebarFooter className="p-2">
           <SidebarMenu>
             {threads.length > 0 && (

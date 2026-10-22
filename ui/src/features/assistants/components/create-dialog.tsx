@@ -14,10 +14,12 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getErrorMessage } from "@/lib/utils";
 
 interface CreateAssistantDialogProps {
   isPending: boolean;
-  onCreate: (data: { name: string; description: string }) => void;
+  onCreate: (data: { name: string; description: string }) => Promise<unknown>;
 }
 
 export function CreateAssistantDialog({
@@ -28,15 +30,35 @@ export function CreateAssistantDialog({
   const common = useTranslations("Common");
   const [open, setOpen] = useState(false);
   const [data, setData] = useState({ name: "", description: "" });
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const busy = pending || isPending;
 
-  const handleSubmit = () => {
-    onCreate(data);
-    setOpen(false);
-    setData({ name: "", description: "" });
+  const handleSubmit = async () => {
+    if (busy || !data.name.trim()) return;
+    setPending(true);
+    setError(null);
+    try {
+      await onCreate({ ...data, name: data.name.trim() });
+      setOpen(false);
+      setData({ name: "", description: "" });
+    } catch (error) {
+      setError(getErrorMessage(error, t("toastAddFailed")));
+    } finally {
+      setPending(false);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!busy) {
+          setOpen(value);
+          setError(null);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline">
           <PlusCircle className="mr-2 h-4 w-4" /> {t("addAssistant")}
@@ -46,7 +68,7 @@ export function CreateAssistantDialog({
         <DialogHeader>
           <DialogTitle>{t("addNew")}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
+        <fieldset disabled={busy} className="min-w-0 space-y-4 py-4">
           <div className="space-y-2">
             <Label>{t("nameRequired")}</Label>
             <Input
@@ -65,15 +87,20 @@ export function CreateAssistantDialog({
               placeholder={t("descriptionPlaceholder")}
             />
           </div>
-        </div>
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </fieldset>
         <DialogFooter>
-          <Button onClick={handleSubmit} disabled={isPending}>
-            {isPending ? (
+          <Button onClick={handleSubmit} disabled={busy || !data.name.trim()}>
+            {busy ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <PlusCircle className="mr-2 h-4 w-4" />
             )}
-            {isPending ? common("adding") : common("add")}
+            {busy ? common("adding") : common("add")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Sidebar,
   SidebarContent,
@@ -5,15 +7,10 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { WorkspaceSwitcher } from "./workspace-switcher";
-import { Workspace } from "@/types/entity";
+import { Workspace, AuthUser } from "@/types/entity";
 import type { CSSProperties, ReactNode } from "react";
-
-// 模拟数据 (实际应从 props 或 context 获取)
-const user = {
-  name: "User",
-  email: "user@example.com",
-  avatar: "/avatars/placeholder.jpg",
-};
+import { useQuery } from "@tanstack/react-query";
+import { getClientApi } from "@/lib/api/client";
 
 type AppSidebarProps = {
   children: ReactNode;
@@ -28,6 +25,16 @@ export function AppSidebar({
   isGuest = false,
   collapsed = false,
 }: AppSidebarProps) {
+  const { data: currentUser } = useQuery<AuthUser>({
+    queryKey: ["current-user"],
+    enabled: !isGuest,
+    queryFn: () => getClientApi().auth.getMe(),
+  });
+  const user = {
+    name: currentUser?.full_name || currentUser?.email || "",
+    email: currentUser?.email || "",
+    avatar: "",
+  };
   return (
     <Sidebar
       collapsible="none"

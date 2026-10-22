@@ -9,6 +9,7 @@ ENV BACKEND_URL=${BACKEND_URL}
 
 # Copy package files
 COPY ui/package.json ui/bun.lock ./
+COPY ui/patches/ ./patches/
 
 # Install dependencies
 RUN bun install --frozen-lockfile

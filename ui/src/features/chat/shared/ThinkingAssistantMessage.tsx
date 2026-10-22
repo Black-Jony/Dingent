@@ -5,11 +5,14 @@ import {
   CopilotChatAssistantMessage,
   CopilotChatAssistantMessageProps,
 } from "@copilotkit/react-core/v2";
-import { ThinkingAccordion } from "./ThinkingAccordion";
+import {
+  ThinkingAccordion,
+  type ExecutionTraceData,
+} from "./ThinkingAccordion";
 export function ThinkingAssistantMessage(
   props: CopilotChatAssistantMessageProps,
 ) {
-  const message = props.message as AssistantMessage;
+  const message = props.message as AssistantMessage & ExecutionTraceData;
   const content = message.content || "";
 
   // Extract thinking content
@@ -17,22 +20,41 @@ export function ThinkingAssistantMessage(
   const match = content.match(regex);
 
   let thinkingContent = "";
-  // We don't strip the thinking tags from the message passed to CopilotChatAssistantMessage
-  // because typically the UI library handles clean rendering, or you might need to
-  // manually pass a cleaner message prop if Copilot doesn't handle hidden tags.
-  // Assuming the original behavior was desired:
   const cleanMessage = { ...message };
 
   if (match) {
-    thinkingContent = match[1];
+    thinkingContent = match[1].trim();
     // Create a copy of the message with cleaned content for the main display
     cleanMessage.content = content.replace(match[0], "").trim();
   }
-  const isRunning = props.isRunning;
-  // If no thinking content found, render default
-  if (!thinkingContent) {
+  const isRunProgress = message.id.startsWith("dingent-run-progress-");
+  const latestAssistant = props.messages?.findLast(
+    (item) => item.role === "assistant",
+  );
+  const isRunning = Boolean(
+    props.isRunning &&
+    (isRunProgress || !latestAssistant || latestAssistant.id === message.id),
+  );
+  if (!match) {
     return <CopilotChatAssistantMessage {...props} />;
   }
+  const hasAnswer = cleanMessage.content.trim().length > 0;
+  const hasToolCalls = Boolean(cleanMessage.toolCalls?.length);
+  const isLivePlaceholder =
+    isRunProgress || (!props.messages && !hasAnswer && !hasToolCalls);
+  // Old snapshots can contain empty thinking tags on every assistant message.
+  if (
+    !thinkingContent &&
+    !message.executionSteps?.length &&
+    !message.executionFailed &&
+    !message.executionStopped &&
+    !(isLivePlaceholder && isRunning)
+  ) {
+    return hasAnswer || hasToolCalls ? (
+      <CopilotChatAssistantMessage {...props} message={cleanMessage} />
+    ) : null;
+  }
+
   return (
     <div
       className={twMerge(
@@ -41,18 +63,23 @@ export function ThinkingAssistantMessage(
       )}
     >
       <ThinkingAccordion
+        messageId={message.id}
+        key={isRunning ? "running" : "complete"}
         content={thinkingContent}
         isThinking={isRunning}
-        defaultExpanded={!!(isRunning && thinkingContent)}
+        defaultExpanded={false}
+        steps={message.executionSteps}
+        failed={message.executionFailed}
+        stopped={message.executionStopped}
       />
 
-      {/* Standard Assistant Message Content */}
-      <CopilotChatAssistantMessage
-        {...props}
-        message={cleanMessage}
-        // Reset class to avoid conflicts
-        className=""
-      />
+      {(hasAnswer || hasToolCalls) && (
+        <CopilotChatAssistantMessage
+          {...props}
+          message={cleanMessage}
+          className=""
+        />
+      )}
     </div>
   );
 }

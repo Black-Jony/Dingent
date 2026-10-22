@@ -2,11 +2,16 @@ import json
 from typing import Any, cast
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_litellm.chat_models import litellm as langchain_litellm_chat_models
 from langgraph.types import Command
 
-from dingent.engine.agents.simple_agent import DingMiddleware, mcp_artifact_to_agui_display
+from dingent.engine.agents.simple_agent import (
+    DingMiddleware,
+    _plain_object_to_table_display,
+    _structured_data_model_text,
+    mcp_artifact_to_agui_display,
+)
 
 
 def test_mcp_artifact_to_agui_display_builds_official_a2ui_operations():
@@ -41,6 +46,100 @@ def test_mcp_artifact_to_agui_display_keeps_markdown_payload_for_client_renderer
     assert result == [{"type": "markdown", "title": "QC Analysis Result", "content": "### Result\n- Passed"}]
 
 
+def test_plain_object_display_expands_record_lists_into_columns():
+    data = {
+        "databases": [
+            {"id": "hg19:avsnp150", "build": "hg19", "available": False},
+            {"id": "hg38:avsnp150", "build": "hg38", "available": True},
+        ],
+        "count": 2,
+    }
+
+    display = _plain_object_to_table_display(data)
+
+    assert display[0]["title"] == "Databases"
+    assert display[0]["columns"] == ["id", "build", "available"]
+    assert display[0]["rows"] == [
+        ["hg19:avsnp150", "hg19", "False"],
+        ["hg38:avsnp150", "hg38", "True"],
+    ]
+    assert display[1]["rows"] == [["count", "2"]]
+
+
+def test_structured_data_model_text_keeps_record_details():
+    summary = _structured_data_model_text(
+        {
+            "databases": [
+                {"id": "hg19:avsnp150", "available": False},
+                {"id": "hg38:avsnp150", "available": True},
+            ],
+            "count": 2,
+        }
+    )
+
+    assert "databases: 2 records" in summary
+    assert "id=hg19:avsnp150; available=False" in summary
+    assert "id=hg38:avsnp150; available=True" in summary
+    assert "count: 2" in summary
+
+
+def test_structured_data_model_text_stops_at_the_limit():
+    summary = _structured_data_model_text(
+        {"records": [{"id": index, "value": "x" * 200} for index in range(1000)]},
+        limit=500,
+    )
+
+    assert len(summary) <= 500
+    assert summary.endswith("...")
+
+
+@pytest.mark.asyncio
+async def test_ding_middleware_enriches_generic_protocol_for_model_and_display():
+    middleware = DingMiddleware()
+
+    class MockTool:
+        name = "list_annotation_databases"
+
+    class MockRequest:
+        tool_call = {"id": "call_databases", "args": {}}
+        tool = MockTool()
+        state = {"messages": []}
+
+    payload = {
+        "databases": [
+            {"id": "hg19:avsnp150", "build": "hg19", "available": False},
+            {"id": "hg38:avsnp150", "build": "hg38", "available": True},
+        ],
+        "count": 2,
+    }
+
+    async def mock_handler(req):  # noqa: ARG001
+        return ToolMessage(
+            content=json.dumps(
+                {
+                    "model_text": "Available annotation databases",
+                    "display": {
+                        "association_table": {
+                            "columns": ["Property", "Value"],
+                            "rows": [],
+                        }
+                    },
+                    "data": payload,
+                }
+            ),
+            tool_call_id="call_databases",
+        )
+
+    result = await middleware.awrap_tool_call(MockRequest(), mock_handler)
+
+    messages = result.update["messages"]
+    assert "Structured result:" in messages[0].content
+    assert "hg38:avsnp150" in messages[0].content
+    rendered = json.dumps(messages[1].content, ensure_ascii=False)
+    assert "Databases" in rendered
+    assert "hg19:avsnp150" in rendered
+
+
 @pytest.mark.asyncio
 async def test_ding_middleware_awrap_model_call_normalizes_string_content_blocks():
     middleware = DingMiddleware()
@@ -63,6 +162,28 @@ async def test_ding_middleware_awrap_model_call_normalizes_string_content_blocks
     result = await middleware.awrap_model_call(cast(Any, MockRequest()), cast(Any, mock_handler))
 
     assert result == "ok"
+
+
+@pytest.mark.parametrize("message_type", [SystemMessage, HumanMessage, AIMessage])
+def test_litellm_message_conversion_flattens_only_plain_text_system_content(message_type):
+    content = [{"type": "text", "text": "Domain instructions"}, "Response language: French"]
+    message = message_type(content=content)
+
+    message_dict = langchain_litellm_chat_models._convert_message_to_dict(message)
+
+    expected = "Domain instructions\n\nResponse language: French" if message_type is SystemMessage else content
+    assert message_dict["content"] == expected
+    assert message.content == content
+
+
+def test_litellm_message_conversion_preserves_system_block_metadata():
+    content = [{"type": "text", "text": "Cached instructions", "cache_control": {"type": "ephemeral"}}]
+    message = SystemMessage(content=content)
+
+    message_dict = langchain_litellm_chat_models._convert_message_to_dict(message)
+
+    assert message_dict["content"] == content
+    assert message.content == content
 
 
 def test_litellm_message_conversion_preserves_reasoning_content():
@@ -184,8 +305,8 @@ async def test_ding_middleware_preserves_legacy_plugin_display_protocol():
 
     legacy_display = {
         "association_table": {
-            "columns": ["Property", "Value"],
-            "rows": [["accession", "P04637"]],
+            "columns": ["Accession", "Organism"],
+            "rows": [["P04637", "Homo sapiens"]],
         }
     }
 
@@ -197,6 +318,7 @@ async def test_ding_middleware_preserves_legacy_plugin_display_protocol():
                 "structured_content": {
                     "model_text": "AlphaFold result",
                     "display": legacy_display,
+                    "data": {"raw_payload": "preserved for the client"},
                 }
             },
         )

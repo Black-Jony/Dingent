@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isAxiosError } from "axios";
 
 import { getServerApi } from "@/lib/api/server";
 import { Header } from "@/components/layout/header";
@@ -18,7 +19,12 @@ export default async function DashboardAppLayout({
 }) {
   const [api, { slug }] = await Promise.all([getServerApi(), params]);
 
-  const workspace = await api.workspaces.getBySlug(slug).catch(() => null);
+  const workspace = await api.workspaces
+    .getBySlug(slug)
+    .catch((error: unknown) => {
+      if (isAxiosError(error) && error.response?.status === 404) return null;
+      throw error;
+    });
 
   if (!workspace) {
     return notFound();
@@ -32,7 +38,7 @@ export default async function DashboardAppLayout({
           <LanguageSwitch />
           <ThemeSwitch />
           <ConfigDrawer />
-          <ProfileDropdown />
+          <ProfileDropdown workspace={workspace} />
         </div>
       </Header>
       <Main>{children}</Main>

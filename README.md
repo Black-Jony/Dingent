@@ -1,5 +1,13 @@
 # Dingent
 
+## Newdisplay Collaboration Version
+
+This branch contains the newdisplay application: seven UI languages, inline
+analysis results, an expandable results workspace, and chat regression fixes.
+See [collaboration and deployment](docs/deployment/newdisplay.md) for setup and
+the separately delivered compact database. No runtime database or credentials
+are included in this public repository.
+
 Dingent is a cross-platform AI agent framework. It combines a Python backend, a Next.js frontend, workspace-based collaboration, assistant/workflow management, plugin execution, and chat runtime APIs into one deployable application.
 
 The project is under active development. The current codebase is centered around the bundled FastAPI service and the `ui/` Next.js application.

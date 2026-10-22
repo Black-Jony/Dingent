@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   useAssistantsConfig,
@@ -7,6 +6,7 @@ import {
   useSaveWorkflow,
   useCreateWorkflow,
   useDeleteWorkflow,
+  workflowKeys,
 } from "@/features/workflows/hooks";
 import { useParams } from "next/navigation";
 import { getClientApi } from "@/lib/api/client";
@@ -18,9 +18,8 @@ import { LoadingSkeleton } from "@/components/common/loading-skeleton";
 import { PageContainer } from "@/components/common/page-container";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { Edge, Node } from "@xyflow/react";
 import { Workflow, WorkflowEdge, WorkflowNode } from "@/types/entity";
 
 export default function WorkflowsPage() {
@@ -48,11 +47,19 @@ export default function WorkflowsPage() {
   const createWorkflow = useCreateWorkflow(api.workflows, slug);
   const deleteWorkflow = useDeleteWorkflow(api.workflows, slug);
   const updateWorkflowMutation = useMutation({
-    mutationFn: ({ updates }: { updates: any }) =>
-      api.workflows.update(updates),
+    mutationFn: ({
+      id,
+      updates,
+    }: {
+      id: string;
+      updates: Partial<
+        Pick<Workflow, "name" | "description" | "model_config_id">
+      >;
+    }) => api.workflows.updateSettings(id, updates),
     onSuccess: () => {
       toast.success(t("updateSuccess"));
-      queryClient.invalidateQueries({ queryKey: ["workflows", slug] });
+      queryClient.invalidateQueries({ queryKey: workflowKeys.lists(slug) });
+      queryClient.invalidateQueries({ queryKey: workflowKeys.details() });
     },
     onError: (e: any) => toast.error(e.message || t("updateFailed")),
   });
@@ -83,29 +90,18 @@ export default function WorkflowsPage() {
         {
           id: currentWorkflow.id, // 显式指定 ID
           name: currentWorkflow.name, // 如果后端需要 name
+          description: currentWorkflow.description,
           nodes,
           edges,
           // 避免 ...currentWorkflow 混入 create_at 等不必要的字段
         },
         {
-          onSuccess: () => {
-            // 可选：静默保存或显示 "Saved"
-            // toast.success("Workflow saved");
-          },
           onError: (e) => toast.error(t("saveFailed")),
         },
       );
     },
     [selectedId, workflowsQ.data, saveWorkflowMutation, t],
   );
-
-  // Logic: 自动选中第一个 (可选体验优化)
-  useEffect(() => {
-    if (workflowsQ.isSuccess && workflowsQ.data.length > 0 && !selectedId) {
-      // 如果需要进入页面默认选中第一个，可以在这里处理
-      // handleSelectWorkflow(workflowsQ.data[0].id);
-    }
-  }, [workflowsQ.isSuccess, workflowsQ.data, selectedId, handleSelectWorkflow]);
 
   // 3. UX: 更好的 Loading 策略 (不阻塞整个页面，Sidebar 可以先出来)
   // 如果 workflows 加载慢，确实需要 skeleton。但 assistants 加载慢是否应该阻塞 UI？
@@ -117,7 +113,7 @@ export default function WorkflowsPage() {
       title={t("title")}
       description={t("description")}
       // 4. CSS: 确保容器占满剩余高度，而不是硬编码 h-screen
-      className="flex flex-col h-[calc(100vh-64px)]" // 假设 Header 是 64px
+      className="min-h-0"
     >
       <WorkflowProvider>
         {/* 移除 h-screen，改用 h-full 适应 PageContainer 给的高度 */}
@@ -130,7 +126,7 @@ export default function WorkflowsPage() {
               selectedWorkflowId={selectedId}
               onSelectWorkflow={handleSelectWorkflow}
               onCreateWorkflow={(input) =>
-                createWorkflow.mutate(input, {
+                createWorkflow.mutateAsync(input, {
                   onSuccess: (wf: Workflow) => {
                     toast.success(t("created"));
                     handleSelectWorkflow(wf.id);
@@ -151,8 +147,8 @@ export default function WorkflowsPage() {
                   },
                 });
               }}
-              onUpdateWorkflow={(updates) =>
-                updateWorkflowMutation.mutate({ updates })
+              onUpdateWorkflow={(id, updates) =>
+                updateWorkflowMutation.mutateAsync({ id, updates })
               }
               isUpdatingWorkflow={updateWorkflowMutation.isPending}
             />

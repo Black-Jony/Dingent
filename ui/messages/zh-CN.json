@@ -70,7 +70,8 @@
     "selectLayout": "选择布局样式",
     "layoutDescription": "选择默认展开、紧凑图标或完整布局模式",
     "selectDirection": "选择网站文字方向",
-    "directionDescription": "选择从左到右或从右到左的文字方向"
+    "directionDescription": "保持默认界面布局，或手动选择从左到右、从右到左。",
+    "autoDirection": "默认布局"
   },
   "Overview": {
     "pageHeading": "仪表盘",
@@ -225,8 +226,15 @@
       "initializing": "正在初始化...",
       "planUpdated": "计划已更新。",
       "step": "步骤 {number}：{content}",
-      "thinking": "思考中...",
-      "process": "思考过程..."
+      "thinking": "处理中...",
+      "process": "执行过程",
+      "tool": "调用工具：{name}",
+      "result": "收到结果：{name}",
+      "completed": "执行完成",
+      "stopped": "执行已停止",
+      "failed": "执行失败",
+      "stepCount": "{count} 个步骤",
+      "callDetails": "{count} 次调用"
     },
     "copilot": {
       "placeholder": "输入消息...",
@@ -247,6 +255,16 @@
       "close": "关闭聊天",
       "title": "Dingent 聊天",
       "welcome": "今天有什么可以帮你？"
+    },
+    "starter": {
+      "capabilities": "展示 {agent} 可以用现有数据完成哪些任务。",
+      "summary": "总结这个工作流能够访问的关键数据。",
+      "analysis": "执行一次聚焦分析并解释结果。"
+    },
+    "analysisWorkspace": {
+      "results": "分析结果",
+      "expand": "在分析工作区中展开",
+      "close": "关闭分析工作区"
     }
   },
   "Auth": {

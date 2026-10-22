@@ -70,7 +70,8 @@
     "selectLayout": "レイアウト形式を選択",
     "layoutDescription": "デフォルト展開、アイコンのみ、フルレイアウトから選択します",
     "selectDirection": "文字方向を選択",
-    "directionDescription": "左から右、または右から左の文字方向を選択します"
+    "directionDescription": "既定の画面レイアウトを維持するか、左から右・右から左を手動で選択します。",
+    "autoDirection": "既定のレイアウト"
   },
   "Overview": {
     "pageHeading": "ダッシュボード",
@@ -225,8 +226,15 @@
       "initializing": "初期化中...",
       "planUpdated": "プランを更新しました。",
       "step": "ステップ {number}: {content}",
-      "thinking": "思考中...",
-      "process": "思考プロセス..."
+      "thinking": "処理中...",
+      "process": "実行プロセス",
+      "tool": "ツールを実行：{name}",
+      "result": "結果を受信：{name}",
+      "completed": "実行完了",
+      "stopped": "実行停止",
+      "failed": "実行失敗",
+      "stepCount": "{count} ステップ",
+      "callDetails": "{count} 回の呼び出し"
     },
     "copilot": {
       "placeholder": "メッセージを入力...",
@@ -247,6 +255,16 @@
       "close": "チャットを閉じる",
       "title": "Dingent チャット",
       "welcome": "今日はどのようなお手伝いができますか？"
+    },
+    "starter": {
+      "capabilities": "{agent} が利用可能なデータで何ができるか表示してください。",
+      "summary": "このワークフローがアクセスできる重要なデータを要約してください。",
+      "analysis": "焦点を絞った分析を実行し、結果を説明してください。"
+    },
+    "analysisWorkspace": {
+      "results": "分析結果",
+      "expand": "分析ワークスペースで開く",
+      "close": "分析ワークスペースを閉じる"
     }
   },
   "Auth": {

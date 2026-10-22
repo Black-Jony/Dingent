@@ -20,7 +20,7 @@ from ag_ui.core import (
     ThinkingTextMessageEndEvent,
     ThinkingTextMessageStartEvent,
 )
-from ag_ui.core.events import RunStartedEvent
+from ag_ui.core.events import RunFinishedEvent, RunStartedEvent
 from ag_ui_langgraph.agent import Command, normalize_tool_content
 from ag_ui_langgraph.types import LangGraphReasoning
 from ag_ui_langgraph.utils import (
@@ -41,6 +41,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, BaseMessage, Huma
 from loguru import logger
 
 from dingent.engine.agents import messages as DingMessages
+from dingent.engine.agents.response_language import normalize_response_locale
 from dingent.engine.agents.simple_agent import mcp_artifact_to_agui_display
 
 
@@ -166,7 +167,8 @@ def ding_langchain_messages_to_agui(messages: list[BaseMessage]):
             message_content = stringify_if_needed(resolve_message_content(message.content))
 
             if message_content:
-                message_content = f"<thinking>{thinking_content}</thinking>\n{message_content}"
+                if thinking_content.strip():
+                    message_content = f"<thinking>{thinking_content}</thinking>\n{message_content}"
                 thinking_content = ""
 
             agui_messages.append(
@@ -467,6 +469,10 @@ class DingLangGraphAGUIAgent(LangGraphAGUIAgent):
         yield self._dispatch_event(
             MessagesSnapshotEvent(type=EventType.MESSAGES_SNAPSHOT, messages=ding_langchain_messages_to_agui(messages)),
         )
+        # Loading history is a finite replay, not a new model execution.
+        yield self._dispatch_event(
+            RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=thread_id, run_id=run_id),
+        )
 
     async def get_state_and_messages_snapshots(self, config) -> AsyncGenerator[Any]:
         state = await self.graph.aget_state(config)
@@ -482,6 +488,10 @@ class DingLangGraphAGUIAgent(LangGraphAGUIAgent):
         )
 
     async def prepare_stream(self, input: RunAgentInput, agent_state, config):
+        config["configurable"] = {
+            **config.get("configurable", {}),
+            "response_locale": normalize_response_locale((input.forwarded_props or {}).get("response_locale")),
+        }
         previous_count = len(agent_state.values.get("messages", []))
         agent_state.values["messages"] = [msg for msg in agent_state.values.get("messages", []) if msg.type != "activity"]
         logger.info(

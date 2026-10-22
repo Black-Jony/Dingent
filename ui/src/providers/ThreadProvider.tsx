@@ -7,13 +7,16 @@ import {
   useContext,
   useCallback,
   useMemo,
-  ReactNode,
+  useRef,
 } from "react";
 import { Dispatch, SetStateAction } from "react";
 
 import { v4 as uuidv4 } from "uuid";
 import { getClientApi } from "@/lib/api/client";
 import { useParams } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { toast } from "sonner";
+import { isAxiosError } from "axios";
 
 export interface ChatThread {
   id: string;
@@ -56,6 +59,7 @@ interface ThreadProviderProps {
 }
 
 export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
+  const common = useTranslations("Common");
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [activeThreadId, setActiveThreadId] = useState<string>("");
   const [isInitializing, setIsInitializing] = useState(true);
@@ -65,6 +69,12 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
     () => getClientApi().forWorkspace(slug, { visitorId }),
     [slug, visitorId],
   );
+  const apiRef = useRef(api);
+  const threadStateRef = useRef({ threads, activeThreadId });
+  useEffect(() => {
+    apiRef.current = api;
+    threadStateRef.current = { threads, activeThreadId };
+  }, [api, threads, activeThreadId]);
   const currentThreadStorageKey = `${CURRENT_THREAD_ID_KEY}:${slug}:${visitorId || "authenticated"}`;
 
   const fetchThreads = useCallback(async () => {
@@ -78,7 +88,7 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
       }));
     } catch (error) {
       console.error("Failed to fetch threads", error);
-      return [];
+      return null;
     }
   }, [api.threads]);
 
@@ -101,7 +111,7 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
 
     const init = async () => {
       setIsInitializing(true);
-      const serverThreads = await fetchThreads();
+      const serverThreads = (await fetchThreads()) ?? [];
 
       if (!mounted) return;
 
@@ -152,48 +162,63 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
 
   const updateThreadTitle = useCallback(async () => {
     const latestThreads = await fetchThreads();
+    if (!latestThreads || apiRef.current !== api) return;
     setThreads((currentThreads) => {
       const activeLocalThread = currentThreads.find(
         (thread) =>
-          thread.id === activeThreadId &&
+          thread.id === threadStateRef.current.activeThreadId &&
           !latestThreads.some((latestThread) => latestThread.id === thread.id),
       );
       return activeLocalThread
         ? [activeLocalThread, ...latestThreads]
         : latestThreads;
     });
-  }, [activeThreadId, fetchThreads]);
+  }, [api, fetchThreads]);
 
   const deleteThread = useCallback(
     async (id: string) => {
-      // 1. 乐观更新 UI (先删界面，显得快)
-      const oldThreads = [...threads];
-      setThreads((prev) => prev.filter((t) => t.id !== id));
-
-      // 切换选中状态逻辑
-      if (id === activeThreadId) {
-        const remaining = oldThreads.filter((t) => t.id !== id);
-        if (remaining.length > 0) {
-          setActiveThreadId(remaining[0]!.id);
-        } else {
-          createNewLocalThread();
-        }
-      }
-
       try {
-        await api.threads.delete(id);
+        await api.threads.delete(id).catch((error: unknown) => {
+          // Empty local conversations may not have been persisted yet.
+          if (
+            !isAxiosError<{ detail?: string }>(error) ||
+            error.response?.status !== 404 ||
+            error.response.data?.detail !== "Thread not found"
+          ) {
+            throw error;
+          }
+        });
+        if (apiRef.current !== api) return;
+        setThreads((prev) => prev.filter((thread) => thread.id !== id));
+        if (id === threadStateRef.current.activeThreadId) {
+          const remaining = threadStateRef.current.threads.filter(
+            (thread) => thread.id !== id,
+          );
+          if (remaining.length > 0) {
+            setActiveThreadId(remaining[0].id);
+          } else {
+            createNewLocalThread();
+          }
+        }
       } catch (error) {
-        setThreads(oldThreads);
+        console.error("Failed to delete thread", error);
+        toast.error(common("error"));
       }
     },
-    [threads, activeThreadId, createNewLocalThread],
+    [api, common, createNewLocalThread],
   );
 
   const deleteAllThreads = useCallback(async () => {
-    setThreads([]);
-    createNewLocalThread();
-    await api.threads.deleteAll();
-  }, [createNewLocalThread]);
+    try {
+      await api.threads.deleteAll();
+      if (apiRef.current !== api) return;
+      setThreads([]);
+      createNewLocalThread();
+    } catch (error) {
+      console.error("Failed to clear threads", error);
+      toast.error(common("error"));
+    }
+  }, [api, common, createNewLocalThread]);
 
   const value = useMemo(
     () => ({
@@ -207,7 +232,7 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
       deleteAllThreads,
       refreshThreads: async () => {
         const data = await fetchThreads();
-        setThreads(data);
+        if (data && apiRef.current === api) setThreads(data);
       },
     }),
     [
@@ -219,6 +244,7 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
       deleteThread,
       deleteAllThreads,
       fetchThreads,
+      api,
     ],
   );
 

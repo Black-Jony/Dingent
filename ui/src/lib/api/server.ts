@@ -14,7 +14,7 @@ export async function getServerApi() {
   const cookieStore = await cookies();
 
   return new ApiClient(
-    { baseURL: getBaseUrl() },
+    { baseURL: getBaseUrl(), adapter: "fetch" },
     cookieStore.get("access_token")?.value,
     cookieStore.get("visitor_id")?.value,
     () => {

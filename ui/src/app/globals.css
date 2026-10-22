@@ -124,17 +124,92 @@
   }
 }
 
-/* Radix scroll locking mistakes the sidebar's body margin for scrollbar width. */
-@media (min-width: 768px) {
-  body[data-scroll-locked]:has([data-copilot-sidebar]) {
-    padding-right: 0 !important;
-  }
-}
-body:has([data-copilot-sidebar])
-  [data-copilotkit][data-slot="tooltip-content"],
-body:has([data-copilot-sidebar])
+body:has([data-dingent-chat]) [data-copilotkit][data-slot="tooltip-content"],
+body:has([data-dingent-chat])
   [data-copilotkit][data-slot="dropdown-menu-content"],
-body:has([data-copilot-sidebar])
+body:has([data-dingent-chat])
   [data-copilotkit][data-slot="dropdown-menu-sub-content"] {
   z-index: 1300 !important;
+}
+
+:root {
+  --dingent-analysis-width: clamp(34rem, 40vw, 52rem);
+}
+
+/* Resolve Arabic text without reversing controls or data columns. */
+html[lang="ar"] :is(p, h1, h2, h3, h4, h5, h6, input, textarea, td, th) {
+  unicode-bidi: plaintext;
+}
+
+html[lang="ar"] :is(pre, code) {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+[data-chat-workspace] {
+  direction: ltr;
+  grid-template-columns: minmax(0, 1fr) 0;
+  transition: grid-template-columns 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html[dir="rtl"] [data-chat-workspace] > [data-chat-pane],
+html[dir="rtl"] [data-chat-workspace] > [data-analysis-column] {
+  direction: rtl;
+}
+
+[data-analysis-column] {
+  min-width: 0;
+}
+
+[data-dingent-chat] [data-testid="copilot-scroll-content"] > div {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 72rem;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+}
+
+[data-dingent-chat],
+[data-dingent-chat] [data-copilotkit] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+@media (max-width: 767px) {
+  [data-dingent-chat] {
+    overflow-x: hidden;
+  }
+
+  [data-dingent-chat] [data-testid="copilot-scroll-content"] > div {
+    padding-inline: 1rem;
+  }
+}
+
+/* Progress rows share the answer column in flat and virtual message lists. */
+[data-dingent-chat] .copilotKitAssistantMessage,
+[data-dingent-chat] .copilotKitMessages > .flex.flex-col.gap-2,
+[data-dingent-chat] .copilotKitMessages [data-index] > .flex.flex-col.gap-2 {
+  width: 100%;
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+[data-dingent-chat] .copilotKitAssistantMessage:has([data-analysis-artifact]) {
+  max-width: 72rem;
+}
+
+[data-dingent-chat] [data-analysis-artifact] {
+  width: 100%;
+  max-width: none;
+}
+
+@media (min-width: 1280px) {
+  [data-chat-workspace][data-analysis-open="true"] {
+    grid-template-columns: minmax(36rem, 1fr) var(--dingent-analysis-width);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-chat-workspace] {
+    transition: none;
+  }
 }

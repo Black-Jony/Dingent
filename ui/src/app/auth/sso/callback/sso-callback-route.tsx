@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { getClientApi } from "@/lib/api/client";
 import { useAuthStore } from "@/store";
 import { useTranslations } from "next-intl";
+import { getSafeReturnPath } from "@/lib/safe-urls";
 
 export default function SsoCallbackRoute() {
   const t = useTranslations("Auth");
@@ -16,7 +17,7 @@ export default function SsoCallbackRoute() {
 
   useEffect(() => {
     const token = searchParams.get("token");
-    const next = searchParams.get("next") || "/";
+    const next = getSafeReturnPath(searchParams.get("next"));
     if (!token) {
       toast.error(t("ssoNoToken"));
       router.replace("/auth/login");

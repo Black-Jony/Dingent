@@ -35,8 +35,15 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
   const api = getClientApi();
   const wfApi = api.forWorkspace(slug).workflows;
   const { draggedAssistant, setUsedAssistantIds } = useWorkflowContext();
-  const { data: workflowData, isLoading } = useWorkflow(wfApi, workflowId);
+  const {
+    data: workflowData,
+    isLoading,
+    isError,
+    isPlaceholderData,
+    refetch,
+  } = useWorkflow(wfApi, workflowId, slug);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const hydratedWorkflowId = useRef<string | null>(null);
 
   // 本地状态
   const [nodes, setNodes] = useState<any[]>([]);
@@ -44,13 +51,18 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
 
   // 1. 初始化数据 (Hydration)
   useEffect(() => {
-    if (workflowData) {
+    if (
+      workflowData &&
+      !isPlaceholderData &&
+      hydratedWorkflowId.current !== workflowData.id
+    ) {
+      hydratedWorkflowId.current = workflowData.id;
       const { nodes: initNodes, edges: initEdges } =
         normalizeWorkflow(workflowData);
       setNodes(initNodes);
       setEdges(initEdges);
     }
-  }, [workflowData]);
+  }, [workflowData, isPlaceholderData]);
   useEffect(() => {
     const ids = new Set(
       nodes.map((n) => n.data?.assistantId as string).filter(Boolean),
@@ -79,7 +91,7 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || isPlaceholderData) {
     return (
       <div className="flex h-full items-center justify-center">
         <LoadingSkeleton />
@@ -87,31 +99,48 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
     );
   }
 
+  if (isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 text-destructive">
+        <p>{common("error")}</p>
+        <Button variant="outline" onClick={() => refetch()}>
+          {common("retry")}
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="h-full w-full relative" ref={wrapperRef}>
+    <div
+      className="relative flex h-full min-h-0 w-full flex-col"
+      ref={wrapperRef}
+    >
       <Button
         onClick={() => onSave(nodes, edges)}
         disabled={isSaving}
         size="sm"
+        className="mb-2 shrink-0 self-start"
       >
         <Save className="mr-2 h-4 w-4" />
         {isSaving ? common("saving") : t("saveWorkflow")}
       </Button>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onDrop={(e) => onDrop(e, draggedAssistant)}
-        onDragOver={onDragOver}
-        fitView
-      >
-        <Background />
-        <Controls />
-      </ReactFlow>
+      <div className="min-h-0 flex-1">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onDrop={(e) => onDrop(e, draggedAssistant)}
+          onDragOver={onDragOver}
+          fitView
+        >
+          <Background />
+          <Controls />
+        </ReactFlow>
+      </div>
     </div>
   );
 }
@@ -120,7 +149,7 @@ function WorkflowCanvasContent({ workflowId, onSave, isSaving }: CanvasProps) {
 export function WorkflowCanvas(props: CanvasProps) {
   return (
     <ReactFlowProvider>
-      <WorkflowCanvasContent {...props} />
+      <WorkflowCanvasContent key={props.workflowId} {...props} />
     </ReactFlowProvider>
   );
 }

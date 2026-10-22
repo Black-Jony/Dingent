@@ -224,3 +224,27 @@ src/dingent/static
 ui/test-results/
 src/bio_workspace/
 src/data/
+
+# Private deployment state must never be committed to the public repository.
+.env.*
+!.env.example
+!.env.*.example
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.sqlite3-*
+*.db
+*.db-*
+*.key
+*.pem
+*.p12
+*.pfx
+/security/
+/dingent-deploy-database/
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.bak
+/ui/playwright-report/
+/.benchmarks/

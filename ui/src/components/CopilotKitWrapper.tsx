@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useLocale } from "next-intl";
 
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import { useAuthStore } from "@/store";
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
 import { theme } from "./theme";
+import { answerCopyRenderer } from "@/features/chat/shared/AnswerCopyButton";
+
+const customMessageRenderers = [answerCopyRenderer];
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +27,7 @@ function CopilotKitContent({
   accessToken: string | null;
   isGuest: boolean;
 }) {
+  const locale = useLocale();
   const activityRenderers = useMemo(() => {
     return [createA2UIMessageRenderer({ theme })];
   }, []);
@@ -56,12 +61,14 @@ function CopilotKitContent({
   return (
     <CopilotKitProvider
       renderActivityMessages={activityRenderers}
+      renderCustomMessages={customMessageRenderers}
       runtimeUrl={runtimeUrl}
       headers={headers}
       properties={{
         authorization: accessToken,
         workspace_slug: slug,
         is_guest: isGuest,
+        response_locale: locale,
       }}
     >
       {children}

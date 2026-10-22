@@ -1,53 +1,46 @@
 "use client";
 
-import React, { useState } from "react";
-import { useTranslations } from "next-intl";
+import React, { useRef, useState } from "react";
 import { Info } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { useClickOutside } from "@/hooks/use-click-outside";
 
 export const WorkflowDetails: React.FC<{ description?: string }> = ({
   description,
 }) => {
   const t = useTranslations("Chat.workflow");
   const [isOpen, setIsOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useClickOutside(panelRef, () => setIsOpen(false), buttonRef);
 
   if (!description) return null;
 
   return (
-    <div className="relative group">
-      {/* 折叠内容 */}
-      <div
-        className={`
-          grid transition-all duration-300 ease-out overflow-hidden
-          ${isOpen ? "grid-rows-[1fr] opacity-100 mt-2" : "grid-rows-[0fr] opacity-0 mt-0"}
-        `}
+    <div className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={() => setIsOpen((open) => !open)}
+        className="inline-flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        aria-label={t("info")}
+        aria-expanded={isOpen}
+        title={t("info")}
       >
-        <div className="min-h-0">
-          <div className="p-3 rounded-lg border border-indigo-500/20 bg-indigo-500/5 text-xs text-indigo-200/80 leading-relaxed shadow-inner">
-            <span className="text-indigo-400 font-semibold mr-1">
-              {t("about")}
-            </span>
-            {description}
-          </div>
-        </div>
-      </div>
+        <Info className="size-4" />
+      </button>
 
-      {/* 控制按钮 - 放在底部或侧边根据布局决定，这里做成 toggle 形式 */}
-      <div className="flex justify-start mt-1">
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className={`
-            flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors px-2 py-0.5 rounded-md
-            ${
-              isOpen
-                ? "text-indigo-400 bg-indigo-500/10"
-                : "text-neutral-600 hover:text-neutral-400 hover:bg-neutral-800/50"
-            }
-          `}
+      {isOpen && (
+        <div
+          ref={panelRef}
+          role="dialog"
+          className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-md border bg-popover p-3 text-sm leading-relaxed text-popover-foreground shadow-lg"
         >
-          <Info className="w-3 h-3" />
-          {isOpen ? t("hide") : t("info")}
-        </button>
-      </div>
+          <div className="mb-1 font-medium">{t("about")}</div>
+          <p className="text-muted-foreground">{description}</p>
+        </div>
+      )}
     </div>
   );
 };

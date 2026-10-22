@@ -70,7 +70,8 @@
     "selectLayout": "Select layout style",
     "layoutDescription": "Choose between default expanded, compact icon-only, or full layout mode",
     "selectDirection": "Select site direction",
-    "directionDescription": "Choose between left-to-right or right-to-left site direction"
+    "directionDescription": "Keep the default interface layout, or choose left-to-right or right-to-left manually.",
+    "autoDirection": "Default layout"
   },
   "Overview": {
     "pageHeading": "Dashboard",
@@ -225,8 +226,15 @@
       "initializing": "Initializing...",
       "planUpdated": "Plan updated.",
       "step": "Step {number}: {content}",
-      "thinking": "Thinking...",
-      "process": "Thinking Process..."
+      "thinking": "Working...",
+      "process": "Execution",
+      "tool": "Using tool: {name}",
+      "result": "Received result: {name}",
+      "completed": "Execution complete",
+      "stopped": "Execution stopped",
+      "failed": "Execution failed",
+      "stepCount": "{count, plural, one {# step} other {# steps}}",
+      "callDetails": "{count} calls"
     },
     "copilot": {
       "placeholder": "Type a message...",
@@ -247,6 +255,16 @@
       "close": "Close chat",
       "title": "Dingent Chat",
       "welcome": "How can I help you today?"
+    },
+    "starter": {
+      "capabilities": "Show me what {agent} can do with the available data.",
+      "summary": "Summarize the most important data this workflow can access.",
+      "analysis": "Run a focused analysis and explain the result."
+    },
+    "analysisWorkspace": {
+      "results": "Analysis results",
+      "expand": "Open in analysis workspace",
+      "close": "Close analysis workspace"
     }
   },
   "Auth": {

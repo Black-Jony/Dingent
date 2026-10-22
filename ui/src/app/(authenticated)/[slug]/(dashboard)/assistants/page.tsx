@@ -50,15 +50,19 @@ function CreateAssistantButton({
   const [saveDialogOpen, setSaveDialogOpen] = useState(false);
 
   const handleSaveClick = async () => {
-    await onSave();
-    setSaveDialogOpen(false);
+    try {
+      await onSave();
+      setSaveDialogOpen(false);
+    } catch {
+      // The mutation displays the failure; keep the confirmation and draft.
+    }
   };
 
   return (
     <FloatingActionButton>
       <CreateAssistantDialog
         isPending={createMutation.isPending}
-        onCreate={createMutation.mutate}
+        onCreate={createMutation.mutateAsync}
       />
 
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
@@ -114,12 +118,18 @@ export default function AssistantsPage() {
   } = useAssistants(slug);
 
   // 2. Editor State Logic
-  const { editable, hasChanges, updateAssistant, getDirtyAssistants } =
-    useAssistantEditor(assistantsQuery.data);
+  const {
+    editable,
+    hasChanges,
+    updateAssistant,
+    getDirtyAssistants,
+    markSaved,
+  } = useAssistantEditor(assistantsQuery.data, slug);
   const handleBatchSave = async () => {
     const dirtyData = getDirtyAssistants();
     if (dirtyData.length > 0) {
       await updateBatchMutation.mutateAsync(dirtyData);
+      markSaved(dirtyData);
     }
   };
   return (

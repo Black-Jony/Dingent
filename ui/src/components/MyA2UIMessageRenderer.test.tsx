@@ -1,6 +1,16 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
+import {
+  AnalysisWorkspaceProvider,
+  AnalysisWorkspaceSlot,
+} from "@/features/chat/shared/AnalysisWorkspace";
 
 const processMessages = vi.fn();
 
@@ -170,10 +180,13 @@ describe("createA2UIMessageRenderer", () => {
       />,
     );
 
-    expect(screen.getByRole("img", { name: "Plant height" })).toHaveAttribute(
+    const sankeyImage = screen.getByRole("img", { name: "Plant height" });
+    expect(sankeyImage).toHaveAttribute(
       "src",
       "data:image/png;base64,aW1hZ2U=",
     );
+    expect(sankeyImage).toHaveClass("w-auto", "max-w-full");
+    expect(sankeyImage).not.toHaveClass("w-full", "max-w-none");
     expect(
       screen.getByRole("heading", { name: "Species (Human)" }),
     ).toBeInTheDocument();
@@ -206,5 +219,44 @@ describe("createA2UIMessageRenderer", () => {
 
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
+  });
+
+  it("moves an expanded artifact to the workspace without duplicating it", () => {
+    const renderer = createA2UIMessageRenderer({});
+    const Render = renderer.render;
+
+    render(
+      <AnalysisWorkspaceProvider>
+        <Render
+          activityType="a2ui-surface"
+          content={{
+            type: "table",
+            title: "Users",
+            columns: ["name"],
+            rows: [{ name: "Alice" }],
+          }}
+          message={{ id: "activity-users" }}
+          agent={{}}
+        />
+        <AnalysisWorkspaceSlot />
+      </AnalysisWorkspaceProvider>,
+    );
+
+    expect(screen.getAllByTestId("legacy-table")).toHaveLength(1);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open in analysis workspace" }),
+    );
+
+    expect(document.querySelector("[data-analysis-workspace]")).not.toBeNull();
+    expect(screen.getAllByTestId("legacy-table")).toHaveLength(1);
+
+    fireEvent.click(
+      within(screen.getByRole("complementary", { name: "Users" })).getByRole(
+        "button",
+        { name: "Close analysis workspace" },
+      ),
+    );
+    expect(document.querySelector("[data-analysis-workspace]")).toBeNull();
+    expect(screen.getAllByTestId("legacy-table")).toHaveLength(1);
   });
 });

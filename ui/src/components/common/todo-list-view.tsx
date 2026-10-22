@@ -8,7 +8,40 @@ interface TodoItem {
   status: "pending" | "in_progress" | "completed";
 }
 
-export function TodoListView({ data }: { data: TodoItem[] }) {
+export function getToolTodos(value: unknown): TodoItem[] | undefined {
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      return undefined;
+    }
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    return undefined;
+  const todos = (value as { todos?: unknown }).todos;
+  if (
+    !Array.isArray(todos) ||
+    !todos.every(
+      (todo) =>
+        todo &&
+        typeof todo === "object" &&
+        typeof todo.content === "string" &&
+        todo.content.trim().length > 0 &&
+        ["pending", "in_progress", "completed"].includes(todo.status),
+    )
+  ) {
+    return undefined;
+  }
+  return todos as TodoItem[];
+}
+
+export function TodoListView({
+  data,
+  isRunning = true,
+}: {
+  data: TodoItem[];
+  isRunning?: boolean;
+}) {
   const t = useTranslations("Renderer");
   const todos = data;
 
@@ -31,7 +64,11 @@ export function TodoListView({ data }: { data: TodoItem[] }) {
           let bgClass = "bg-white";
 
           if (todo.status === "in_progress") {
-            icon = <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />;
+            icon = (
+              <Loader2
+                className={`w-4 h-4 text-blue-500 ${isRunning ? "animate-spin" : ""}`}
+              />
+            );
             textClass = "text-gray-800 font-medium";
             bgClass = "bg-blue-50/30";
           } else if (todo.status === "completed") {

@@ -54,7 +54,7 @@ vi.mock("@/components/A2UI/data-table", () => ({
   DataTable: ({ columns, data }: { columns: any[]; data: any[] }) => (
     <div data-testid="datatable">
       <div data-testid="table-columns">
-        {columns.map((c: any) => c.accessorKey || c).join(",")}
+        {columns.map((c: any) => c.id || c.accessorKey || c).join(",")}
       </div>
       <div data-testid="table-rows">{JSON.stringify(data)}</div>
     </div>

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { isAxiosError } from "axios";
 import { getServerApi } from "@/lib/api/server";
 import Providers from "./providers";
 
@@ -12,9 +13,12 @@ export default async function DashboardAppLayout({
   sidebar: React.ReactNode;
 }) {
   const [api, { slug }] = await Promise.all([getServerApi(), params]);
-  const [workspace] = await Promise.all([
-    api.workspaces.getBySlug(slug).catch(() => null),
-  ]);
+  const workspace = await api.workspaces
+    .getBySlug(slug)
+    .catch((error: unknown) => {
+      if (isAxiosError(error) && error.response?.status === 404) return null;
+      throw error;
+    });
 
   if (!workspace) {
     return notFound();

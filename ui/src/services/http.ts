@@ -33,7 +33,9 @@ export function createHttpClient(
 ): AxiosInstance {
   const instance = axios.create({
     baseURL: config.baseURL,
+    headers: config.headers,
     timeout: config.timeoutMs ?? 120_000,
+    adapter: config.adapter,
   });
 
   attachAuthInterceptor(instance, onUnauthorized);

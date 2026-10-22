@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   Loader2,
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { getErrorMessage } from "@/lib/utils";
 import type {
   LLMModelConfig,
   LLMModelConfigCreate,
@@ -38,7 +39,9 @@ import type {
 interface ModelConfigDialogProps {
   model?: LLMModelConfig;
   isPending: boolean;
-  onSave: (data: LLMModelConfigCreate | LLMModelConfigUpdate) => void;
+  onSave: (
+    data: LLMModelConfigCreate | LLMModelConfigUpdate,
+  ) => Promise<unknown>;
   onTestConnection?: (
     data: TestConnectionRequest,
   ) => Promise<TestConnectionResponse>;
@@ -105,6 +108,11 @@ export function ModelConfigDialog({
   const t = useTranslations("Models");
   const common = useTranslations("Common");
   const [open, setOpen] = useState(false);
+  const initializedId = useRef<string | null>(null);
+  const testRequestId = useRef(0);
+  const savingRef = useRef(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // 1. 新增：专门用于存储 Parameters 文本域的字符串状态
   const [jsonParams, setJsonParams] = useState("{}");
@@ -129,6 +137,13 @@ export function ModelConfigDialog({
   }>({ status: "idle", message: "" });
 
   useEffect(() => {
+    if (!open) {
+      initializedId.current = null;
+      return;
+    }
+    const id = model?.id ?? "new";
+    if (initializedId.current === id) return;
+    initializedId.current = id;
     if (model) {
       setData({
         name: model.name,
@@ -157,13 +172,26 @@ export function ModelConfigDialog({
       setJsonParams("{}");
     }
     setJsonError(null);
+    setSaveError(null);
     setTestResult({ status: "idle", message: "" });
   }, [model, open]);
 
+  useEffect(() => {
+    testRequestId.current += 1;
+    setTestResult({ status: "idle", message: "" });
+    return () => {
+      testRequestId.current += 1;
+    };
+  }, [data, jsonParams, open]);
+
   // 辅助函数：尝试解析 JSON
-  const parseParams = (): Record<string, any> | null => {
+  const parseParams = (): Record<string, unknown> | null => {
     try {
       const parsed = JSON.parse(jsonParams);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        setJsonError(t("invalidJson"));
+        return null;
+      }
       setJsonError(null);
       return parsed;
     } catch (e) {
@@ -172,35 +200,56 @@ export function ModelConfigDialog({
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (isPending || savingRef.current) return;
     // 提交前解析 JSON
     const parsedParams = parseParams();
     if (parsedParams === null) return; // 如果解析失败，阻止提交
 
     // 将解析后的 parameters 合并到 data 中
-    onSave({ ...data, parameters: parsedParams });
-    setOpen(false);
+    savingRef.current = true;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await onSave({
+        ...data,
+        name: data.name.trim(),
+        model: data.model.trim(),
+        parameters: parsedParams,
+      });
+      setOpen(false);
+    } catch (error) {
+      setSaveError(
+        getErrorMessage(error, t(model ? "updateFailed" : "addFailed")),
+      );
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const handleTest = async () => {
-    if (!onTestConnection) return;
+    if (!onTestConnection || isPending || savingRef.current) return;
 
     // 测试连接前也需要解析 JSON，确保测试使用的是最新参数
     const parsedParams = parseParams();
     if (parsedParams === null) return;
 
     setTestResult({ status: "testing", message: t("testing") });
+    const requestId = ++testRequestId.current;
     try {
       const result = await onTestConnection({
         ...data,
         parameters: parsedParams,
       });
+      if (requestId !== testRequestId.current) return;
       setTestResult({
         status: result.success ? "success" : "error",
         message: result.message,
         latency: result.latency_ms,
       });
     } catch (error: unknown) {
+      if (requestId !== testRequestId.current) return;
       const errorMessage =
         error instanceof Error ? error.message : t("testFailed");
       setTestResult({
@@ -214,9 +263,7 @@ export function ModelConfigDialog({
     const currentProvider = PROVIDERS.find(
       (option) => option.value === data.provider,
     );
-    const nextProvider = PROVIDERS.find(
-      (option) => option.value === provider,
-    );
+    const nextProvider = PROVIDERS.find((option) => option.value === provider);
     const shouldUsePreset =
       !data.api_base || data.api_base === currentProvider?.apiBase;
 
@@ -231,10 +278,16 @@ export function ModelConfigDialog({
   const selectedProvider = PROVIDERS.find(
     (option) => option.value === data.provider,
   );
-  const isValid = data.name && data.provider && data.model;
+  const isValid = data.name.trim() && data.provider && data.model.trim();
+  const busy = isPending || isSaving;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(value) => {
+        if (!busy) setOpen(value);
+      }}
+    >
       <DialogTrigger asChild>
         {trigger || (
           <Button variant="outline">
@@ -246,8 +299,8 @@ export function ModelConfigDialog({
         <DialogHeader>
           <DialogTitle>{model ? t("editTitle") : t("addTitle")}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          <div className="grid grid-cols-2 gap-4">
+        <fieldset disabled={busy} className="min-w-0 space-y-4 py-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label>{t("configName")}</Label>
               <Input
@@ -372,13 +425,18 @@ export function ModelConfigDialog({
               </AlertDescription>
             </Alert>
           )}
-        </div>
+          {saveError && (
+            <Alert variant="destructive">
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          )}
+        </fieldset>
         <DialogFooter className="gap-2">
           {onTestConnection && (
             <Button
               onClick={handleTest}
               variant="outline"
-              disabled={!isValid || testResult.status === "testing"}
+              disabled={busy || !isValid || testResult.status === "testing"}
             >
               {testResult.status === "testing" ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -391,20 +449,16 @@ export function ModelConfigDialog({
           {/* 如果 JSON 格式错误，禁用保存按钮 */}
           <Button
             onClick={handleSubmit}
-            disabled={isPending || !isValid || !!jsonError}
+            disabled={busy || !isValid || !!jsonError}
           >
-            {isPending ? (
+            {busy ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : model ? (
               <Save className="mr-2 h-4 w-4" />
             ) : (
               <PlusCircle className="mr-2 h-4 w-4" />
             )}
-            {isPending
-              ? common("saving")
-              : model
-                ? common("update")
-                : common("add")}
+            {busy ? common("saving") : model ? common("update") : common("add")}
           </Button>
         </DialogFooter>
       </DialogContent>

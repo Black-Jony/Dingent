@@ -319,23 +319,30 @@ function LayoutConfig() {
 }
 
 function DirConfig() {
-  const { defaultDir, dir, setDir } = useDirection();
+  const { preference, setDir } = useDirection();
   const t = useTranslations("ConfigDrawer");
   return (
     <div>
       <SectionTitle
         title={t("direction")}
-        showReset={defaultDir !== dir}
-        onReset={() => setDir(defaultDir)}
+        showReset={preference !== "auto"}
+        onReset={() => setDir("auto")}
       />
       <Radio
-        value={dir}
+        value={preference}
         onValueChange={setDir}
         className="grid w-full max-w-md grid-cols-3 gap-4"
         aria-label={t("selectDirection")}
         aria-describedby="direction-description"
       >
         {[
+          {
+            value: "auto",
+            label: t("autoDirection"),
+            icon: (props: SVGProps<SVGSVGElement>) => (
+              <IconThemeSystem {...props} />
+            ),
+          },
           {
             value: "ltr",
             label: t("leftToRight"),

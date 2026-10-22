@@ -1,8 +1,8 @@
 import React, { useRef, useState } from "react";
-import { ChevronDown, Workflow, Check, Bot, Loader2 } from "lucide-react";
+import { Bot, Check, ChevronDown, Loader2, Workflow } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { WorkflowSummary } from "@/types/entity";
-import { useTranslations } from "next-intl";
 
 interface WorkflowSelectorProps {
   workflows: WorkflowSummary[];
@@ -24,7 +24,7 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
 
   useClickOutside(dropdownRef, () => setIsOpen(false), buttonRef);
 
-  const activeWorkflow = workflows.find((w) => w.id === activeId);
+  const activeWorkflow = workflows.find((workflow) => workflow.id === activeId);
 
   const handleSelect = (id: string) => {
     setActiveId(id);
@@ -32,93 +32,62 @@ export const WorkflowSelector: React.FC<WorkflowSelectorProps> = ({
   };
 
   return (
-    <div className="relative">
-      {/* 触发按钮：设计为更紧凑的胶囊样式 */}
+    <div className="relative min-w-0">
       <button
         ref={buttonRef}
-        onClick={() => !isLoading && setIsOpen(!isOpen)}
+        type="button"
+        onClick={() => !isLoading && setIsOpen((open) => !open)}
         disabled={isLoading || workflows.length === 0}
-        className={`
-          group flex items-center gap-2 pl-1 pr-3 py-1 rounded-full border transition-all duration-200
-          ${
-            isOpen
-              ? "bg-neutral-800 border-neutral-700 text-neutral-200"
-              : "bg-neutral-900/50 border-neutral-800 hover:border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800"
-          }
-        `}
+        className="group inline-flex h-9 w-full max-w-[15rem] items-center gap-2 rounded-md border bg-background px-2.5 text-sm text-foreground shadow-xs transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
       >
-        {/* 图标容器 */}
-        <div
-          className={`
-          flex items-center justify-center w-6 h-6 rounded-full transition-colors
-          ${isOpen ? "bg-indigo-500/20 text-indigo-400" : "bg-neutral-800 text-neutral-500 group-hover:text-neutral-300"}
-        `}
-        >
-          {isLoading ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            <Bot className="w-3.5 h-3.5" />
-          )}
-        </div>
-
-        {/* 文本区域 */}
-        <div className="flex flex-col items-start text-left mr-1">
-          <span className="text-[10px] uppercase font-bold text-neutral-600 leading-none mb-0.5 group-hover:text-neutral-500 transition-colors">
-            {t("workflow.agent")}
-          </span>
-          <span className="text-xs font-medium truncate max-w-[120px] sm:max-w-[160px] leading-none">
-            {isLoading
-              ? t("workflow.loading")
-              : workflows.length === 0
-                ? t("workflow.none")
-                : activeWorkflow?.name || t("workflow.select")}
-          </span>
-        </div>
-
+        {isLoading ? (
+          <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+        ) : (
+          <Bot className="size-4 shrink-0 text-muted-foreground" />
+        )}
+        <span className="truncate">
+          {isLoading
+            ? t("workflow.loading")
+            : workflows.length === 0
+              ? t("workflow.none")
+              : activeWorkflow?.name || t("workflow.select")}
+        </span>
         <ChevronDown
-          className={`w-3.5 h-3.5 ml-1 opacity-50 transition-transform duration-200 ${isOpen ? "rotate-180 opacity-100" : ""}`}
+          className={`size-3.5 shrink-0 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
         />
       </button>
 
-      {/* 下拉菜单：绝对定位，带毛玻璃和阴影 */}
       {isOpen && (
         <div
           ref={dropdownRef}
-          className="absolute top-full left-0 mt-2 w-64 z-50 animate-in fade-in zoom-in-95 slide-in-from-top-1 duration-150"
+          role="listbox"
+          className="absolute end-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-lg"
         >
-          <div className="p-1 rounded-xl border border-neutral-800 bg-neutral-900/95 backdrop-blur-xl shadow-2xl shadow-black/80 ring-1 ring-white/5">
-            <div className="max-h-[280px] overflow-y-auto custom-scrollbar">
-              {workflows.map((w) => {
-                const isActive = activeId === w.id;
-                return (
-                  <button
-                    key={w.id}
-                    onClick={() => handleSelect(w.id)}
-                    className={`
-                      w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all
-                      ${
-                        isActive
-                          ? "bg-neutral-800 text-white font-medium shadow-sm"
-                          : "text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200"
-                      }
-                    `}
-                  >
-                    <Workflow
-                      className={`w-4 h-4 ${isActive ? "text-indigo-400" : "opacity-40"}`}
-                    />
-                    <span className="flex-1 truncate">{w.name}</span>
-                    {isActive && (
-                      <Check className="w-3.5 h-3.5 text-indigo-400" />
-                    )}
-                  </button>
-                );
-              })}
-              {workflows.length === 0 && (
-                <div className="px-4 py-3 text-xs text-neutral-500 text-center">
-                  {t("workflow.noneAvailable")}
-                </div>
-              )}
-            </div>
+          <div className="max-h-72 overflow-y-auto">
+            {workflows.map((workflow) => {
+              const isActive = activeId === workflow.id;
+              return (
+                <button
+                  key={workflow.id}
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  onClick={() => handleSelect(workflow.id)}
+                  className="flex w-full items-center gap-2 rounded-sm px-2.5 py-2 text-start text-sm transition-colors hover:bg-accent hover:text-accent-foreground"
+                >
+                  <Workflow className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="flex-1 truncate">{workflow.name}</span>
+                  {isActive && <Check className="size-4 shrink-0" />}
+                </button>
+              );
+            })}
+            {workflows.length === 0 && (
+              <div className="px-3 py-5 text-center text-sm text-muted-foreground">
+                {t("workflow.noneAvailable")}
+              </div>
+            )}
           </div>
         </div>
       )}
