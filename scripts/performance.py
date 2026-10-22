@@ -1,3 +1,4 @@
+import os
 import statistics
 import uuid
 from contextlib import asynccontextmanager
@@ -135,7 +136,7 @@ def test_performance_batch(
             "tools": [],
             "context": [],
             "forwardedProps": {
-                "authorization": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0QHRlc3QuY29tIiwiZXhwIjoxNzcwODIwNTE0fQ.TyN5PNsVyfSlQYcs9Z1-Mloqdm99b4Cldp2Wl6UldCY",
+                "authorization": os.environ["DINGENT_BENCHMARK_TOKEN"],
                 "workspace_slug": "Test Workspace",
                 "is_guest": False,
             },

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+root="$(git rev-parse --show-toplevel)"
+if command -v python >/dev/null 2>&1; then
+  exec python "$root/.publish/publish.py" check --staged
+elif command -v python3 >/dev/null 2>&1; then
+  exec python3 "$root/.publish/publish.py" check --staged
+else
+  echo "BLOCKED: Python 3.12+ is required for publication checks." >&2
+  exit 1
+fi
