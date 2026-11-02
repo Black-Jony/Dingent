@@ -403,7 +403,9 @@ class DingMiddleware(AgentMiddleware):
                         artifact = _plain_object_to_table_display(payload)
                         model_text = _model_text_with_structured_data(model_text, payload)
                 elif isinstance(data, dict) and data and "model_text" not in data:
-                    artifact = _plain_object_to_table_display(data)
+                    metadata = getattr(request.tool, "metadata", None) or {}
+                    if metadata.get("dingent_auto_table", True):
+                        artifact = _plain_object_to_table_display(data)
                     model_text = _structured_data_model_text(data)
                 elif isinstance(data, dict) and "model_text" in data:
                     model_text = data.get("model_text", content)

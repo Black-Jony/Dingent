@@ -1,0 +1,1 @@
+uvx --with tzdata mcp-server-time --help

@@ -82,11 +82,11 @@ def ding_resolve_reasoning_content(chunk: AIMessageChunk | AIMessage) -> LangGra
                     )
 
     content = chunk.content
-    # Anthropic reasoning response
-    if isinstance(content, list) and content and content[0]:
-        if not content[0].get("thinking"):
-            return None
-        return LangGraphReasoning(text=content[0]["thinking"], type="text", index=content[0].get("index", 0))
+    # Stored responses can interleave string text and multiple thinking blocks.
+    if isinstance(content, list):
+        thinking_blocks = [block for block in content if isinstance(block, dict) and isinstance(block.get("thinking"), str) and block["thinking"]]
+        if thinking_blocks:
+            return LangGraphReasoning(text="".join(block["thinking"] for block in thinking_blocks), type="text", index=thinking_blocks[0].get("index", 0))
 
     # OpenAI reasoning response
     if hasattr(chunk, "additional_kwargs"):
@@ -101,7 +101,7 @@ def ding_resolve_reasoning_content(chunk: AIMessageChunk | AIMessage) -> LangGra
     return None
 
 
-def ding_langchain_messages_to_agui(messages: list[BaseMessage]):
+def ding_langchain_messages_to_agui(messages: list[BaseMessage]) -> list[AGUIMessage]:
     agui_messages: list[AGUIMessage] = []
     thinking_content = ""
     for message in messages:
@@ -164,7 +164,8 @@ def ding_langchain_messages_to_agui(messages: list[BaseMessage]):
 
             thinking_content_chunk = reasoning.get("text", "") if reasoning else ""
             thinking_content += f"\n{thinking_content_chunk}"
-            message_content = stringify_if_needed(resolve_message_content(message.content))
+            # LangChain joins string blocks and typed text blocks, excluding reasoning/media.
+            message_content = str(message.text)
 
             if message_content:
                 if thinking_content.strip():

@@ -38,6 +38,7 @@ class PluginManifest(PluginBase):
     dependencies: list[str] | None = None
     python_version: str | None = None
     config_schema: list["PluginConfigSchema"] | None = None
+    auto_table: bool = Field(True, description="Automatically display plain JSON tool results as tables")
     _plugin_path: Path | None = PrivateAttr(default=None)
 
     @classmethod

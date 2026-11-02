@@ -95,6 +95,7 @@ class AssistantRuntime:
             async with inst.mcp_client as client:
                 tools = await load_mcp_tools(client.session)
             for t in tools:
+                t.metadata = {**(t.metadata or {}), "dingent_auto_table": inst.manifest.auto_table}
 
                 async def call_tool(
                     arguments: dict,
