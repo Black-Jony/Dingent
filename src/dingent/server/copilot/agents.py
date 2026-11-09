@@ -49,55 +49,44 @@ class DingRunAgentInput(RunAgentInput):
     owner_id: uuid.UUID
 
 
-def ding_resolve_reasoning_content(chunk: AIMessageChunk | AIMessage) -> LangGraphReasoning | None:
-    # -----------------------------------------------------------
-    # 1. 优先检查 additional_kwargs
-    # (Gemini, DeepSeek, OpenAI o1/o3 通常在这里)
-    # -----------------------------------------------------------
-    if hasattr(chunk, "additional_kwargs"):
-        kwargs = chunk.additional_kwargs
+def _visible_ai_text(content: Any) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    return "".join(
+        block if isinstance(block, str) else block["text"]
+        for block in content
+        if isinstance(block, str) or (isinstance(block, dict) and block.get("type") in {"text", "output_text"} and isinstance(block.get("text"), str))
+    )
 
-        # 定义可能的推理字段名列表
-        # 'reasoning_content': DeepSeek R1, 这里的 Gemini 适配器通常也用这个
-        # 'reasoning': 某些版本的 OpenAI 适配器
-        # 'thinking': 某些自定义适配器
-        possible_keys = ["reasoning_content", "reasoning", "thinking"]
 
-        for key in possible_keys:
-            val = kwargs.get(key)
-            if val:
-                # OpenAI 有时会嵌套在字典里: {"summary": [{"text": "..."}]}
-                if isinstance(val, dict):
-                    summary = val.get("summary", [])
-                    if summary and isinstance(summary, list):
-                        data = summary[0]
-                        if data and data.get("text"):
-                            return LangGraphReasoning(type="text", text=data["text"], index=data.get("index", 0))
-                # Gemini / DeepSeek 通常直接就是字符串
-                elif isinstance(val, str) and val.strip():
-                    return LangGraphReasoning(
-                        type="text",
-                        text=val,
-                        index=0,  # 流式通常没有 index，默认为 0
-                    )
+def _reasoning_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        return "".join(_reasoning_text(item) for item in value)
+    if isinstance(value, dict):
+        for key in ("summary", "thinking", "reasoning", "reasoning_content", "text"):
+            text = _reasoning_text(value.get(key))
+            if text:
+                return text
+    return ""
 
-    content = chunk.content
-    # Anthropic reasoning response
-    if isinstance(content, list) and content and content[0]:
-        if not content[0].get("thinking"):
-            return None
-        return LangGraphReasoning(text=content[0]["thinking"], type="text", index=content[0].get("index", 0))
 
-    # OpenAI reasoning response
-    if hasattr(chunk, "additional_kwargs"):
-        reasoning = chunk.additional_kwargs.get("reasoning", {})
-        summary = reasoning.get("summary", [])
-        if summary:
-            data = summary[0]
-            if not data or not data.get("text"):
-                return None
-            return LangGraphReasoning(type="text", text=data["text"], index=data.get("index", 0))
+def ding_resolve_reasoning_content(chunk: AIMessageChunk | AIMessage | dict[str, Any]) -> LangGraphReasoning | None:
+    kwargs = chunk.get("additional_kwargs", {}) if isinstance(chunk, dict) else chunk.additional_kwargs
+    for key in ("reasoning_content", "reasoning", "thinking"):
+        text = _reasoning_text(kwargs.get(key)) if isinstance(kwargs, dict) else ""
+        if text:
+            return LangGraphReasoning(type="text", text=text, index=0)
 
+    content = chunk.get("content") if isinstance(chunk, dict) else chunk.content
+    if isinstance(content, list):
+        blocks = [block for block in content if isinstance(block, dict) and block.get("type") in {"thinking", "reasoning", "reasoning_content"}]
+        text = "".join(_reasoning_text(block) for block in blocks)
+        if text:
+            return LangGraphReasoning(type="text", text=text, index=blocks[0].get("index", 0))
     return None
 
 
@@ -164,7 +153,7 @@ def ding_langchain_messages_to_agui(messages: list[BaseMessage]):
 
             thinking_content_chunk = reasoning.get("text", "") if reasoning else ""
             thinking_content += f"\n{thinking_content_chunk}"
-            message_content = stringify_if_needed(resolve_message_content(message.content))
+            message_content = _visible_ai_text(message.content)
 
             if message_content:
                 if thinking_content.strip():
@@ -198,6 +187,10 @@ def ding_agui_messages_to_langchain(messages: list[AGUIMessage]) -> list[BaseMes
     langchain_messages = []
     for message in messages:
         role = message.role
+        # UI reasoning messages are display-only; native provider reasoning stays
+        # in the server checkpoint and is retained by the ID-based state merge.
+        if role == "reasoning":
+            continue
         if role == "user":
             # Handle multimodal content
             if isinstance(message.content, str):
@@ -353,6 +346,7 @@ def ding_make_json_safe(value: Any, _seen: set[int] | None = None) -> Any:
 
 
 ag_ui_langgraph.agent.langchain_messages_to_agui = ding_langchain_messages_to_agui
+ag_ui_langgraph.agent.agui_messages_to_langchain = ding_agui_messages_to_langchain
 ag_ui_langgraph.utils.agui_messages_to_langchain = ding_agui_messages_to_langchain
 ag_ui_langgraph.utils.make_json_safe = ding_make_json_safe
 
@@ -678,21 +672,49 @@ class DingLangGraphAGUIAgent(LangGraphAGUIAgent):
                 )
             )
 
+    def _finish_thinking_events(self) -> list[Any]:
+        thinking = self.active_run.get("thinking_process") if self.active_run else None
+        if not thinking:
+            return []
+        self.active_run["thinking_process"] = None
+        message_id = thinking["message_id"]
+        events = []
+        if thinking.get("type"):
+            events.append(self._dispatch_event(ThinkingTextMessageEndEvent(type=EventType.THINKING_TEXT_MESSAGE_END, message_id=message_id)))
+        events.append(self._dispatch_event(ThinkingEndEvent(type=EventType.THINKING_END, message_id=message_id)))
+        return events
+
     async def _handle_single_event(self, event: Any, state) -> AsyncGenerator[str]:
-        # 1. 尝试提取 reasoning_data，用于判断是否命中需要修复的逻辑分支
-        # 注意：你需要确保引入了 resolve_reasoning_content 和 LangGraphEventTypes
         event_type = event.get("event")
         chunk = event.get("data", {}).get("chunk")
 
-        reasoning_data = None
-        if event_type == ag_ui_langgraph.LangGraphEventTypes.OnChatModelStream and chunk:
+        if event_type == ag_ui_langgraph.LangGraphEventTypes.OnChatModelStream and chunk is not None:
             reasoning_data = ding_resolve_reasoning_content(chunk)
+            if reasoning_data and (event.get("metadata") or {}).get("emit-messages", True):
+                for evt in self._emit_thinking_events(reasoning_data):
+                    yield evt
 
-        if reasoning_data:
-            for evt in self._emit_thinking_events(reasoning_data):
+            # Normalize only a transport copy: mixed reasoning/text deltas must
+            # still deliver their text and tool calls without altering checkpoints.
+            content = chunk.get("content") if isinstance(chunk, dict) else chunk.content
+            kwargs = chunk.get("additional_kwargs", {}) if isinstance(chunk, dict) else chunk.additional_kwargs
+            tool_chunks = chunk.get("tool_call_chunks") if isinstance(chunk, dict) else getattr(chunk, "tool_call_chunks", None)
+            visible_text = _visible_ai_text(content) if content is not None else None
+            if reasoning_data and not visible_text and not tool_chunks:
+                return
+            if visible_text or tool_chunks:
+                for evt in self._finish_thinking_events():
+                    yield evt
+            updates = {
+                "content": visible_text,
+                "additional_kwargs": {key: value for key, value in (kwargs or {}).items() if key not in {"reasoning_content", "reasoning", "thinking"}},
+            }
+            normalized_chunk = {**chunk, **updates} if isinstance(chunk, dict) else chunk.model_copy(update=updates)
+            event = {**event, "data": {**event["data"], "chunk": normalized_chunk}}
+
+        if event_type == ag_ui_langgraph.LangGraphEventTypes.OnChatModelEnd:
+            for evt in self._finish_thinking_events():
                 yield evt
-
-            return
 
         command_tool_events = [evt async for evt in self._handle_command_tool_end_event(event)]
         if command_tool_events:

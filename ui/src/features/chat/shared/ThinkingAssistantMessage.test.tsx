@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { memo } from "react";
 import { ThinkingAssistantMessage } from "./ThinkingAssistantMessage";
@@ -22,6 +22,106 @@ vi.mock("@copilotkit/react-core/v2", () => ({
 }));
 
 describe("ThinkingAssistantMessage", () => {
+  it("shows real model reasoning alongside tool steps while running and collapses on completion", () => {
+    const steps = [
+      {
+        id: "search-1",
+        toolName: "search_records",
+        label: "search records",
+        status: "complete" as const,
+      },
+    ];
+    const { container, rerender } = render(
+      <ThinkingAccordion
+        content="Check the evidence first."
+        steps={steps}
+        isThinking
+      />,
+    );
+    expect(screen.getByText("Check the evidence first.")).toBeVisible();
+    expect(screen.getByText("search records")).toBeVisible();
+    expect(
+      container.querySelector("[data-model-reasoning]"),
+    ).toBeInTheDocument();
+    rerender(
+      <ThinkingAccordion content="Check the evidence first." steps={steps} />,
+    );
+    expect(screen.getByRole("button", { name: /^Execution:/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Execution:/ }));
+    expect(screen.getByText("Check the evidence first.")).toBeVisible();
+  });
+
+  it("keeps a tool-only trace without a fabricated reasoning section", () => {
+    const { container } = render(
+      <ThinkingAccordion
+        content=""
+        isThinking
+        steps={[{ id: "call", label: "lookup records", status: "running" }]}
+      />,
+    );
+    expect(
+      container.querySelector("[data-execution-trace]"),
+    ).toBeInTheDocument();
+    expect(container.querySelector("[data-model-reasoning]")).toBeNull();
+  });
+
+  it("keeps a running user's collapsed choice when new reasoning arrives", () => {
+    const { rerender } = render(
+      <ThinkingAccordion content="First part" isThinking />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Execution:/ }));
+    rerender(
+      <ThinkingAccordion
+        content="First part, then more reasoning"
+        isThinking
+      />,
+    );
+    expect(screen.getByRole("button", { name: /^Execution:/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
+  it("measures only the current run and freezes the duration after completion", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(10000);
+      const { container, rerender, unmount } = render(
+        <ThinkingAccordion content="Evidence" isThinking startedAt={10000} />,
+      );
+      act(() => vi.advanceTimersByTime(3000));
+      expect(
+        container.querySelector("[data-execution-duration]"),
+      ).toHaveTextContent("3 sec");
+      rerender(<ThinkingAccordion content="Evidence" durationMs={3000} />);
+      act(() => vi.advanceTimersByTime(10000));
+      expect(
+        container.querySelector("[data-execution-duration]"),
+      ).toHaveTextContent("3 sec");
+      expect(container.querySelector(".animate-spin")).toBeNull();
+      unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not invent a duration or a running state when rendering old reasoning", () => {
+    const { container } = render(
+      <ThinkingAccordion content="Saved reasoning" />,
+    );
+    expect(container.querySelector("[data-execution-duration]")).toBeNull();
+    expect(container.querySelector(".animate-spin")).toBeNull();
+    expect(screen.getByRole("button", { name: /^Execution:/ })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+  });
+
   it("updates and settles a cached non-final execution message without remounting", () => {
     const CachedAssistant = memo(ThinkingAssistantMessage);
     const message = {
@@ -49,7 +149,6 @@ describe("ThinkingAssistantMessage", () => {
       </RunProgressContext.Provider>
     );
     const { container, rerender } = render(view(progress));
-    fireEvent.click(screen.getByRole("button", { name: /^Execution:/ }));
     const completedTools: RunProgressState = {
       ...progress,
       executionSteps: progress.executionSteps.map((step) => ({
@@ -81,8 +180,7 @@ describe("ThinkingAssistantMessage", () => {
     );
 
     const toggle = screen.getByRole("button", { name: /^Execution:/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("check the route")).toBeInTheDocument();
     expect(screen.getByTestId("assistant-message")).toHaveTextContent(
       "Final answer",
@@ -110,7 +208,7 @@ describe("ThinkingAssistantMessage", () => {
     );
   });
 
-  it("renders a running process without an empty assistant message", () => {
+  it("does not create an empty thinking panel for a model without reasoning", () => {
     render(
       <ThinkingAssistantMessage
         message={{
@@ -122,7 +220,8 @@ describe("ThinkingAssistantMessage", () => {
       />,
     );
 
-    expect(screen.getByText("Working...")).toBeInTheDocument();
+    expect(screen.queryByText("Working...")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByTestId("assistant-message")).not.toBeInTheDocument();
   });
 
@@ -138,7 +237,6 @@ describe("ThinkingAssistantMessage", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /^Execution:/ }));
     expect(screen.getByRole("button", { name: /^Execution:/ })).toHaveAttribute(
       "aria-expanded",
       "true",
@@ -165,7 +263,7 @@ describe("ThinkingAssistantMessage", () => {
   it("groups repeated calls while preserving expandable call details", () => {
     const { container } = render(
       <ThinkingAccordion
-        content="Old Step 1 log"
+        content="Compare the records before drawing conclusions."
         steps={[
           {
             id: "call-1",
@@ -190,7 +288,9 @@ describe("ThinkingAssistantMessage", () => {
     expect(screen.getByText("2 calls")).toBeInTheDocument();
     expect(screen.getByText("First result")).toBeInTheDocument();
     expect(screen.getByText("Second result")).toBeInTheDocument();
-    expect(screen.queryByText("Old Step 1 log")).not.toBeInTheDocument();
+    expect(
+      screen.getByText("Compare the records before drawing conclusions."),
+    ).toBeInTheDocument();
     expect(container.querySelector(".animate-spin")).toBeNull();
   });
 
@@ -202,8 +302,7 @@ describe("ThinkingAssistantMessage", () => {
         steps={[{ id: "call-1", label: "Current lookup", status: "running" }]}
       />,
     );
-    expect(screen.getByText("Current lookup")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /^Execution:/ }));
+    expect(screen.getAllByText("Current lookup")).toHaveLength(2);
     expect(container.querySelector(".animate-spin")).not.toBeNull();
     rerender(
       <ThinkingAccordion
@@ -257,8 +356,8 @@ describe("ThinkingAssistantMessage", () => {
       screen.getByRole("button", { name: "Execution: Working..." }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("Using tool: direct index status"),
-    ).not.toBeInTheDocument();
+      screen.getByText("Using tool: direct index status"),
+    ).toBeInTheDocument();
   });
 
   it("shows a stopped run without calling it completed or failed", () => {

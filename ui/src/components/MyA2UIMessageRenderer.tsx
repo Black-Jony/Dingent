@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "./A2UI/data-table";
+import { TableCellValue } from "./A2UI/table-cell-value";
+import { tableCatalog } from "./A2UI/table-catalog";
 import { ErrorBoundary } from "react-error-boundary";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
@@ -203,67 +205,8 @@ function normalizeTableContent(content: TableContent): TableContent {
   return { ...content, columns, rows };
 }
 
-function formatCellValue(value: unknown): string {
-  if (value == null) return "-";
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value);
-}
-
 function renderCellValue(value: unknown): ReactNode {
-  if (
-    value &&
-    typeof value === "object" &&
-    "href" in value &&
-    "text" in value
-  ) {
-    const href = String((value as { href: unknown }).href);
-    const text = String((value as { text: unknown }).text);
-    if (/^https?:\/\//i.test(href)) {
-      return (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:underline"
-        >
-          {text}
-        </a>
-      );
-    }
-    return text;
-  }
-
-  const text = formatCellValue(value);
-  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-  const parts: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = linkPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push(
-      <a
-        key={`${match.index}-${match[2]}`}
-        href={match[2]}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-600 hover:underline"
-      >
-        {match[1]}
-      </a>,
-    );
-    lastIndex = linkPattern.lastIndex;
-  }
-
-  if (parts.length === 0) return text;
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts;
+  return <TableCellValue value={value} />;
 }
 
 function ErrorFallback({
@@ -645,7 +588,7 @@ function OfficialA2UISurface({
   theme?: any;
 }) {
   return (
-    <A2UIProvider theme={theme}>
+    <A2UIProvider theme={theme} catalog={tableCatalog}>
       <OfficialA2UIRenderer content={content} />
     </A2UIProvider>
   );

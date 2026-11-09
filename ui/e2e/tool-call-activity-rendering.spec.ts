@@ -276,7 +276,7 @@ async function seedGuestThread(page: any) {
 test.describe("Tool call activity rendering E2E", () => {
   test("settles paced execution across completion, stop, and consecutive questions", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await seedGuestThread(page);
     await interceptAgentRoute(page, "");
     await page.addInitScript(() => {
@@ -317,6 +317,23 @@ test.describe("Tool call activity rendering E2E", () => {
               threadId: input.threadId,
               runId: input.runId,
             });
+            if (currentRun === 1) {
+              const messageId = `reasoning-${input.runId}`;
+              send({ type: "THINKING_START" });
+              send({
+                type: "THINKING_TEXT_MESSAGE_START",
+                messageId,
+                role: "assistant",
+              });
+              send({
+                type: "THINKING_TEXT_MESSAGE_CONTENT",
+                messageId,
+                delta:
+                  "Compare the database evidence before preparing the answer.",
+              });
+              send({ type: "THINKING_TEXT_MESSAGE_END", messageId });
+              send({ type: "THINKING_END" });
+            }
             send({
               type: "TOOL_CALL_START",
               toolCallId: callId,
@@ -386,8 +403,33 @@ test.describe("Tool call activity rendering E2E", () => {
     const trace = page.locator("[data-execution-trace]");
     const toggle = trace.getByRole("button");
     await expect(toggle).toContainText("Working...");
-    await toggle.click();
     await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(trace.locator("[data-model-reasoning]")).toContainText(
+      "Compare the database evidence",
+    );
+    await expect(trace).toContainText("direct index status");
+    await expect(trace).not.toContainText("Using tool:");
+    await expect(trace).not.toContainText("Received result:");
+    await page.screenshot({
+      path: testInfo.outputPath("live-reasoning-desktop.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => document.documentElement.classList.add("dark"));
+    await expect(trace.locator("[data-model-reasoning]")).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth > window.innerWidth,
+      ),
+    ).toBe(false);
+    await page.screenshot({
+      path: testInfo.outputPath("live-reasoning-mobile-dark.png"),
+      fullPage: true,
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.evaluate(() =>
+      document.documentElement.classList.remove("dark"),
+    );
     await page.evaluate(() => {
       (
         window as typeof window & {
@@ -408,6 +450,7 @@ test.describe("Tool call activity rendering E2E", () => {
     });
     await expect(toggle).toContainText("Execution complete");
     await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(trace.locator("[data-execution-duration]")).toBeVisible();
     await expect(trace.locator(".animate-spin")).toHaveCount(0);
     await expect(page.locator(".animate-spin")).toHaveCount(0);
 
@@ -417,6 +460,7 @@ test.describe("Tool call activity rendering E2E", () => {
       page.getByText("Streaming answer 2.", { exact: true }),
     ).toBeVisible();
     await expect(toggle).toContainText("Working...");
+    await expect(trace.locator("[data-model-reasoning]")).toHaveCount(0);
     await page.getByTestId("copilot-send-button").click();
     await expect(page.locator(".animate-spin")).toHaveCount(0);
     await expect(toggle).not.toContainText("Working...");

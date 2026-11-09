@@ -168,6 +168,48 @@ class PublicationTests(unittest.TestCase):
         with self.assertRaises(publish.Rejected):
             publish.check_push(self.target, publish.REMOTE, f"refs/heads/local {head} refs/heads/main {head}\n")
 
+    def test_new_deploy_branch_accepts_clean_commits_from_public_baseline(self):
+        base = self.g(self.target, "rev-parse", "HEAD")
+        self.g(self.target, "update-ref", "refs/remotes/origin/" + publish.BASE_BRANCH, base)
+        (self.target / "src/main.py").write_text("VALUE = 6\n")
+        self.g(self.target, "add", "src/main.py")
+        self.g(self.target, "commit", "-qm", "deployment change")
+        tip = self.g(self.target, "rev-parse", "HEAD")
+        publish.check_push(self.target, publish.REMOTE, f"refs/heads/deploy {tip} refs/heads/deploy {'0' * 40}\n")
+
+    def test_new_deploy_branch_still_checks_earlier_commits(self):
+        base = self.g(self.target, "rev-parse", "HEAD")
+        self.g(self.target, "update-ref", "refs/remotes/origin/" + publish.BASE_BRANCH, base)
+        (self.target / "src/main.py").write_text(self.token())
+        self.g(self.target, "add", "src/main.py")
+        self.g(self.target, "commit", "-qm", "unsafe intermediate deployment")
+        (self.target / "src/main.py").write_text("VALUE = 7\n")
+        self.g(self.target, "add", "src/main.py")
+        self.g(self.target, "commit", "-qm", "clean final snapshot")
+        tip = self.g(self.target, "rev-parse", "HEAD")
+        with self.assertRaises(publish.Rejected):
+            publish.check_push(self.target, publish.REMOTE, f"refs/heads/deploy {tip} refs/heads/deploy {'0' * 40}\n")
+
+    def test_development_branch_and_arbitrary_branch_creation_are_blocked(self):
+        head = self.g(self.target, "rev-parse", "HEAD")
+        for branch in (publish.BASE_BRANCH, "main", "other-deployment"):
+            with self.subTest(branch=branch), self.assertRaises(publish.Rejected):
+                publish.check_push(self.target, publish.REMOTE, f"refs/heads/local {head} refs/heads/{branch} {'0' * 40}\n")
+
+    def test_new_deploy_branch_requires_fetched_public_baseline(self):
+        head = self.g(self.target, "rev-parse", "HEAD")
+        with self.assertRaises(publish.Rejected):
+            publish.check_push(self.target, publish.REMOTE, f"refs/heads/deploy {head} refs/heads/deploy {'0' * 40}\n")
+
+    def test_deploy_branch_non_fast_forward_update_is_blocked(self):
+        base = self.g(self.target, "rev-parse", "HEAD")
+        (self.target / "src/main.py").write_text("VALUE = 8\n")
+        self.g(self.target, "add", "src/main.py")
+        self.g(self.target, "commit", "-qm", "newer deployed version")
+        tip = self.g(self.target, "rev-parse", "HEAD")
+        with self.assertRaises(publish.Rejected):
+            publish.check_push(self.target, publish.REMOTE, f"refs/heads/deploy {base} refs/heads/deploy {tip}\n")
+
     def test_traversal_and_symlink_are_rejected(self):
         with self.assertRaises(publish.Rejected):
             publish.checked_path(self.target, "../outside.txt")

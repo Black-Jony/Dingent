@@ -14,7 +14,8 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REMOTE = "https://github.com/Black-Jony/Dingent.git"
-BRANCH = "dingent-resource-v2"
+BRANCH = "deploy"
+BASE_BRANCH = "dingent-resource-v2"
 SEED = "public-data/db/dingent.sqlite"
 SEED_HASH = "1b4faa60ade22db65a149b8774dccb30480b5617f699a1fc349edbe93236854f"
 MAX_FILE = 20 * 1024 * 1024
@@ -351,11 +352,15 @@ def check_push(root, url, records):
             raise Rejected("Invalid pre-push input")
         _, local_sha, remote_ref, remote_sha = parts
         if remote_ref != "refs/heads/" + BRANCH or set(local_sha) == {"0"}:
-            raise Rejected("This publishing copy only pushes normal updates to dingent-resource-v2")
+            raise Rejected("This publishing copy only creates or normally updates deploy")
         if set(remote_sha) == {"0"}:
-            raise Rejected("Expected existing remote branch; fetch and inspect before publishing")
-        git(root, "merge-base", "--is-ancestor", remote_sha, local_sha)
-        revisions = git(root, "rev-list", "--reverse", remote_sha + ".." + local_sha).decode().splitlines()
+            # A new deployment branch must extend the fetched public baseline;
+            # inspect every added commit, not only its final cleaned snapshot.
+            base_sha = git(root, "rev-parse", "refs/remotes/origin/" + BASE_BRANCH).decode().strip()
+        else:
+            base_sha = remote_sha
+        git(root, "merge-base", "--is-ancestor", base_sha, local_sha)
+        revisions = git(root, "rev-list", "--reverse", base_sha + ".." + local_sha).decode().splitlines()
         if len(revisions) > 100:
             raise Rejected("Too many outgoing commits for automatic review")
         for revision in revisions:

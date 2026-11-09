@@ -240,6 +240,92 @@ vi.mock("./DingentChatMessageView", () => {
 });
 
 describe("ChatPage", () => {
+  it("does not duplicate real reasoning when a final snapshot contains the same text", () => {
+    const { rerender } = render(<ChatPage />);
+    act(() => {
+      agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+      agentSubscriber?.onEvent({
+        event: {
+          type: "THINKING_TEXT_MESSAGE_CONTENT",
+          delta: "Check the evidence.",
+        },
+      });
+    });
+    agentMessages = [
+      { id: "user-1", role: "user", content: "Run the tool" },
+      {
+        id: "assistant-final",
+        role: "assistant",
+        content: "<thinking>Check the evidence.</thinking>Final answer",
+      },
+    ];
+    rerender(<ChatPage />);
+    act(() => agentSubscriber?.onEvent({ event: { type: "RUN_FINISHED" } }));
+    const text = screen.getByTestId("message-view").textContent || "";
+    expect(text.match(/Check the evidence\./g)).toHaveLength(1);
+    expect(text).toContain("Final answer");
+    expect(agentMessages[1].content).toContain("<thinking>");
+  });
+
+  it("does not put any tool or activity text into the model's reasoning", () => {
+    render(<ChatPage />);
+    act(() => {
+      agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+      agentSubscriber?.onEvent({
+        event: {
+          type: "THINKING_TEXT_MESSAGE_CONTENT",
+          delta: "Only the model's own text.",
+        },
+      });
+      agentSubscriber?.onToolCallStartEvent?.({
+        event: { toolCallId: "lookup", toolCallName: "lookup_records" },
+      });
+      agentSubscriber?.onActivitySnapshotEvent?.({
+        event: {
+          messageId: "lookup:activity",
+          content: { title: "Retrieved records" },
+        },
+      });
+    });
+    expect(screen.getByTestId("message-view")).toHaveTextContent(
+      "<thinking>Only the model's own text.</thinking>",
+    );
+    expect(renderedTrace?.executionSteps).toMatchObject([
+      {
+        id: "lookup",
+        label: "lookup records",
+        detail: "Retrieved records",
+        status: "complete",
+      },
+    ]);
+  });
+
+  it("freezes duration on a terminal event and clears it for the next conversation", () => {
+    const clock = vi.spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(10000);
+      const { rerender } = render(<ChatPage />);
+      act(() => {
+        agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+        agentSubscriber?.onEvent({
+          event: { type: "THINKING_TEXT_MESSAGE_CONTENT", delta: "Reasoning" },
+        });
+      });
+      clock.mockReturnValue(14500);
+      act(() => agentSubscriber?.onEvent({ event: { type: "RUN_FINISHED" } }));
+      expect(renderedTrace?.executionDurationMs).toBe(4500);
+      clock.mockReturnValue(20000);
+      act(() => agentSubscriber?.onRunFinalized?.());
+      expect(renderedTrace?.executionDurationMs).toBe(4500);
+      activeThreadId = "next-thread";
+      agentMessages = [];
+      rerender(<ChatPage />);
+      expect(renderedTrace).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   afterEach(() => {
     window.localStorage.removeItem("dingent.debugActivitySnapshot");
     activeThreadId = "thread-1";
@@ -509,8 +595,7 @@ describe("ChatPage", () => {
         event: { type: "RUN_STARTED", runId: "next-run" },
       });
     });
-    expect(renderedTrace?.executionStopped).toBe(false);
-    expect(renderedTrace?.executionSteps).toHaveLength(0);
+    expect(renderedTrace).toBeUndefined();
     expect(screen.getByTestId("running-indicator")).toBeInTheDocument();
   });
 
@@ -748,7 +833,11 @@ describe("ChatPage", () => {
       }),
     );
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(messageText).toContain("Using tool: generate gwas sankey");
+    expect(messageText).toContain("<thinking>thinking</thinking>");
+    expect(messageText).not.toContain("Using tool:");
+    expect(renderedTrace?.executionSteps?.[0].label).toBe(
+      "generate gwas sankey",
+    );
     expect(messageText.indexOf("<thinking>")).toBeLessThan(
       messageText.indexOf("activity-live:live table"),
     );
@@ -782,8 +871,15 @@ describe("ChatPage", () => {
     });
 
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(messageText).toContain("Using tool: list annotation databases");
-    expect(messageText).toContain("Received result: list annotation databases");
+    expect(renderedTrace?.executionSteps).toMatchObject([
+      {
+        id: "call-databases",
+        label: "list annotation databases",
+        status: "complete",
+      },
+    ]);
+    expect(messageText).not.toContain("Using tool:");
+    expect(messageText).not.toContain("Received result:");
     expect(messageText).not.toContain("Received result: a2ui-surface");
   });
 
@@ -814,9 +910,11 @@ describe("ChatPage", () => {
     });
 
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(
-      messageText.match(/Received result: query database record/g),
-    ).toHaveLength(1);
+    expect(renderedTrace?.executionSteps).toHaveLength(1);
+    expect(renderedTrace?.executionSteps?.[0]).toMatchObject({
+      label: "query database record",
+      status: "complete",
+    });
     expect(messageText).not.toContain("Received result: a2ui-surface");
     for (let index = 0; index < 4; index += 1) {
       expect(messageText).toContain(`call-tables:activity:${index}:`);
@@ -845,7 +943,7 @@ describe("ChatPage", () => {
     expect(messageText).toContain("unassociated-activity:");
   });
 
-  it("shows only a temporary loader for a tool-free run and removes it on completion", () => {
+  it("never inserts an empty thinking panel for a tool-free run", () => {
     render(<ChatPage />);
 
     act(() => {
@@ -853,7 +951,7 @@ describe("ChatPage", () => {
         event: { type: "RUN_STARTED", runId: "run-without-details" },
       });
     });
-    expect(screen.getByTestId("message-view")).toHaveTextContent(
+    expect(screen.getByTestId("message-view")).not.toHaveTextContent(
       "<thinking></thinking>",
     );
     expect(screen.getByTestId("message-view")).not.toHaveTextContent(
@@ -921,9 +1019,7 @@ describe("ChatPage", () => {
         },
       });
     });
-    expect(screen.getByTestId("message-view")).toHaveTextContent(
-      "Using tool: previous tool",
-    );
+    expect(renderedTrace?.executionSteps?.[0].label).toBe("previous tool");
 
     agentMessages = [];
     activeThreadId = "thread-empty";

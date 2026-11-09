@@ -5,6 +5,8 @@ import { CopilotChatActivityList } from "./CopilotChatActivityMessage";
 // We use the REAL renderer, not a mock
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
 
+vi.mock("./A2UI/table-catalog", () => ({ tableCatalog: undefined }));
+
 /* ── Mock CopilotKit v2 hooks used internally ────────────────── */
 
 // Real activity messages use a2ui-surface type

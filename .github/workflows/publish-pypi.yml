@@ -247,6 +247,7 @@ jobs:
           path: dist_bin/
 
   publish-to-github-release:
+    if: github.event_name == 'release'
     name: Upload Assets to GitHub Release 🐙
     needs: [build-linux-x86_64, build-linux-arm64, build-windows]
     runs-on: ubuntu-latest
@@ -291,6 +292,7 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
 
   publish-to-testpypi:
+    if: github.event_name == 'release'
     name: Publish Python 🐍 distribution 📦 to TestPyPI
     needs: [build-linux-x86_64]
     runs-on: ubuntu-latest

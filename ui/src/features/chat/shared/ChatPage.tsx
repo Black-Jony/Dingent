@@ -125,13 +125,11 @@ function mergeStreamingActivities(
 function insertRunProgressMessage(
   messages: Message[],
   progressText: string,
-  isRunning: boolean,
   threadId: string,
   trace: ExecutionTraceData = {},
 ) {
   const content = progressText.trim();
   if (
-    !isRunning &&
     !content &&
     !trace.executionSteps?.length &&
     !trace.executionFailed &&
@@ -151,11 +149,24 @@ function insertRunProgressMessage(
     ...trace,
   } as Message;
   const insertIndex = lastUserIndex + 1;
+  // A final snapshot can already contain the same reasoning shown by the live trace.
+  // Strip only that duplicate from display copies, never from stored messages.
+  const remainingMessages = messages.slice(insertIndex).map((message) => {
+    if (!content || message.role !== "assistant" || !message.content)
+      return message;
+    const cleaned = message.content.replace(
+      /<thinking>([\s\S]*?)<\/thinking>/g,
+      (block, reasoning: string) => (reasoning.trim() === content ? "" : block),
+    );
+    return cleaned === message.content
+      ? message
+      : { ...message, content: cleaned.trim() };
+  });
 
   return [
     ...messages.slice(0, insertIndex),
     progressMessage,
-    ...messages.slice(insertIndex),
+    ...remainingMessages,
   ];
 }
 
@@ -198,8 +209,6 @@ function getActivityLabel(content: unknown): string | undefined {
 
 function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
   const t = useTranslations("Chat");
-  const translationsRef = useRef(t);
-  translationsRef.current = t;
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -288,13 +297,19 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     any[]
   >([]);
   activityMessagesRef.current = streamingActivityMessages;
-  const processStepNumberRef = useRef(0);
-  const meaningfulProcessStepCountRef = useRef(0);
   const recordedProcessEventsRef = useRef(new Set<string>());
   const toolCallLabelsRef = useRef(new Map<string, string>());
   const [executionSteps, setExecutionSteps] = useState<ExecutionStep[]>([]);
   const [executionFailed, setExecutionFailed] = useState(false);
   const [executionStopped, setExecutionStopped] = useState(false);
+  const executionStartRef = useRef<number | undefined>(undefined);
+  const [executionStartedAt, setExecutionStartedAt] = useState<number>();
+  const [executionDurationMs, setExecutionDurationMs] = useState<number>();
+  const finishExecutionTiming = useCallback(() => {
+    if (executionStartRef.current == null) return;
+    setExecutionDurationMs(Math.max(0, Date.now() - executionStartRef.current));
+    executionStartRef.current = undefined;
+  }, []);
 
   const {
     thinkingText,
@@ -311,6 +326,8 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     executionSteps,
     executionFailed,
     executionStopped,
+    executionStartedAt,
+    executionDurationMs,
   };
   const completeExecutionStep = useCallback((id: string, detail?: string) => {
     setExecutionSteps((previous) => {
@@ -322,20 +339,6 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       );
     });
   }, []);
-  const appendProcessStep = useCallback(
-    (content: string) => {
-      const normalized = content.trim();
-      if (!normalized) return;
-      processStepNumberRef.current += 1;
-      appendThinkingText(
-        `\n\n${translationsRef.current("thinking.step", {
-          number: processStepNumberRef.current,
-          content: normalized,
-        })}`,
-      );
-    },
-    [appendThinkingText],
-  );
   useRenderToolCall(
     {
       name: "write_todos",
@@ -356,8 +359,9 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     closeArtifact();
     clearThinkingText();
     setIsThinking(false);
-    processStepNumberRef.current = 0;
-    meaningfulProcessStepCountRef.current = 0;
+    executionStartRef.current = undefined;
+    setExecutionStartedAt(undefined);
+    setExecutionDurationMs(undefined);
     recordedProcessEventsRef.current.clear();
     toolCallLabelsRef.current.clear();
     timingStatsRef.current = null;
@@ -446,19 +450,13 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
             !recordedProcessEventsRef.current.has(resultStepKey)
           ) {
             recordedProcessEventsRef.current.add(resultStepKey);
-            meaningfulProcessStepCountRef.current += 1;
-            appendProcessStep(
-              translationsRef.current("thinking.result", { name: label }),
-            );
-            const detail = translationsRef.current("thinking.result", {
-              name: label,
-            });
+            const detail = getActivityLabel(activityEvent.content);
             if (toolCallLabelsRef.current.has(toolCallId)) {
               completeExecutionStep(toolCallId, detail);
             } else {
               setExecutionSteps((previous) => [
                 ...previous,
-                { id: resultStepKey, label: detail, status: "complete" },
+                { id: resultStepKey, label, status: "complete" },
               ]);
             }
           }
@@ -501,26 +499,21 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       const displayName = humanizeToolName(String(toolName));
       toolCallLabelsRef.current.set(toolCallId, displayName);
       if (toolName === "write_todos") return;
-      meaningfulProcessStepCountRef.current += 1;
       setExecutionSteps((previous) => [
         ...previous,
         {
           id: toolCallId,
           toolName: String(toolName),
-          label: translationsRef.current("thinking.tool", {
-            name: displayName,
-          }),
+          label: displayName,
           status: "running",
         },
       ]);
-      appendProcessStep(
-        translationsRef.current("thinking.tool", { name: displayName }),
-      );
     };
 
     const thinkingSubscriber = {
       onRunFinalized: () => {
         if (!subscribed) return undefined;
+        finishExecutionTiming();
         setRunHasEnded(true);
         setIsThinking(false);
         setIsUrlAutoAsking(false);
@@ -528,6 +521,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
       },
       onRunFailed: () => {
         if (!subscribed) return undefined;
+        finishExecutionTiming();
         setRunHasEnded(true);
         setExecutionFailed(true);
         setIsThinking(false);
@@ -556,8 +550,10 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
           setExecutionFailed(false);
           setExecutionStopped(false);
           stats.runStartedAtMs ??= performance.now();
-          processStepNumberRef.current = 0;
-          meaningfulProcessStepCountRef.current = 0;
+          const started = Date.now();
+          executionStartRef.current = started;
+          setExecutionStartedAt(started);
+          setExecutionDurationMs(undefined);
           recordedProcessEventsRef.current.clear();
           toolCallLabelsRef.current.clear();
           clearThinkingText();
@@ -577,12 +573,10 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
 
         if (event.type === "THINKING_TEXT_MESSAGE_CONTENT") {
           const thinkingEvent = event as ThinkingTextMessageContentEvent;
-          const isFirstThinkingDelta = stats.thinkingDeltaCount === 0;
           stats.thinkingDeltaCount += 1;
           stats.thinkingCharCount += getDeltaLength(thinkingEvent.delta);
-          appendThinkingText(
-            `${isFirstThinkingDelta ? "\n\n" : ""}${thinkingEvent.delta}`,
-          );
+          if (typeof thinkingEvent.delta === "string")
+            appendThinkingText(thinkingEvent.delta);
         } else if (event.type === "THINKING_START") {
           setIsThinking(true);
         } else if (
@@ -593,13 +587,11 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
           setIsThinking(false);
         }
         if (event.type === "RUN_FINISHED" || event.type === "RUN_ERROR") {
+          finishExecutionTiming();
           setRunHasEnded(true);
           setExecutionFailed(event.type === "RUN_ERROR");
           setIsUrlAutoAsking(false);
-          if (
-            meaningfulProcessStepCountRef.current === 0 &&
-            stats.thinkingDeltaCount === 0
-          ) {
+          if (stats.thinkingDeltaCount === 0) {
             clearThinkingText();
           }
           logTimingStats(event);
@@ -620,14 +612,15 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     activeThreadId,
     agent.agent,
     agentName,
-    appendProcessStep,
     appendThinkingText,
     completeExecutionStep,
     clearThinkingText,
     setIsThinking,
+    finishExecutionTiming,
   ]);
 
   const stopCurrentRun = useCallback(async () => {
+    finishExecutionTiming();
     pendingLaunchRef.current = null;
     setRunHasEnded(true);
     setExecutionStopped(true);
@@ -644,7 +637,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     } catch (error) {
       console.error("Detaching the stopped chat stream failed", error);
     }
-  }, [agent.agent, copilotkit, setIsThinking]);
+  }, [agent.agent, copilotkit, setIsThinking, finishExecutionTiming]);
 
   useEffect(() => {
     if (activeThreadId) {
@@ -815,12 +808,13 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
         ? insertRunProgressMessage(
             renderedMessages,
             progress.thinkingText,
-            runIsActive,
             currentThreadId || "current",
             {
               executionSteps: progress.executionSteps,
               executionFailed: progress.executionFailed,
               executionStopped: progress.executionStopped,
+              executionStartedAt: progress.executionStartedAt,
+              executionDurationMs: progress.executionDurationMs,
             },
           )
         : renderedMessages;

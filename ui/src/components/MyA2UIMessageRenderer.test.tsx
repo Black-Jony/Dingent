@@ -14,6 +14,8 @@ import {
 
 const processMessages = vi.fn();
 
+vi.mock("./A2UI/table-catalog", () => ({ tableCatalog: undefined }));
+
 vi.mock("@copilotkit/a2ui-renderer", () => ({
   A2UIProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="a2ui-provider">{children}</div>

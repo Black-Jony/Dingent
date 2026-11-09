@@ -5,7 +5,8 @@
 - `dingent_newdisplay`：继续在这里开发、运行、测试。同步工具只读这里，不复制其 `.git`。
 - `dingent_github`：只在这里检查差异、提交和推送。不要在这里启动应用或直接开发。
 
-本副本的唯一远端为 `Black-Jony/Dingent`，本地发布分支为 `dingent-resource-v2`。
+本副本的唯一远端为 `Black-Jony/Dingent`，本地发布分支为 `deploy`。
+`dingent-resource-v2` 留给团队开发，本副本的推送检查不允许更新它。
 同步工具不会 `git add`、提交、推送、重写历史或覆盖开发目录。
 
 ## 日常操作
@@ -14,6 +15,7 @@
 
 ```powershell
 cd D:\dingent\dingent_github
+git switch deploy
 python .publish/publish.py sync
 git status
 git diff
@@ -25,12 +27,19 @@ git diff
 git add -A
 git diff --cached
 git commit -m "描述本次更新"
-git push origin HEAD:dingent-resource-v2
+git push origin HEAD:deploy
 ```
 
 提交前检查暂存内容，而不是仅检查当前文件；推送前检查所有将新增的提交，
 避免“先提交密钥、后来删除”仍把密钥带进历史。这里只允许向指定远端的
-`dingent-resource-v2` 正常更新，不允许强制改写、删除或新建远端分支。
+`deploy` 正常更新，不允许强制改写、删除或创建其他远端分支。
+首次创建 `deploy` 时，必须基于已获取的 `origin/dingent-resource-v2`，并检查所有新增提交。
+
+## 手动打包
+
+在 GitHub Actions 中选择 `publish-pypi.yml` 对应的工作流，手动运行时选择 `deploy` 分支。
+手动运行只生成构建产物，不向 GitHub Release、PyPI 或 TestPyPI 发布。
+Linux x86_64 产物名称为 `dingent-artifacts-linux-x86_64`；服务器保留各自现有的数据库、密钥、配置及插件。
 
 首次从 GitHub 克隆本副本后，需要安装本机钩子（Git 不会自动复制本地配置）：
 
