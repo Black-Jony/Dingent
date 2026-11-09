@@ -494,7 +494,7 @@ async def test_activity_snapshot_streams_before_tool_step_finishes():
     assert activity_index < next_step_finished_index
 
 
-def test_connect_streams_thread_snapshot_events(client: TestClient, session, monkeypatch):
+def test_connect_streams_thread_snapshot_events_without_model_or_plugins(client: TestClient, session, mocker):
     ws = _create_workspace(session=session, slug="ws-connect", allow_guest_access=True)
     thread_id = str(uuid.uuid4())
     visitor_id = str(uuid.uuid4())
@@ -505,19 +505,19 @@ def test_connect_streams_thread_snapshot_events(client: TestClient, session, mon
         messages=[AGUIAssistantMessage(id="a1", role="assistant", content="connected")],
     )
 
-    class _DummyAgent:
-        async def get_thread_messages(self, _thread_id, _run_id):
-            yield messages_event
+    from types import SimpleNamespace
 
-    class _DummySDK:
-        async def resolve_agent(self, _spec, _llm):
-            return _DummyAgent()
+    from langchain_core.messages import AIMessage
+
+    checkpoint = SimpleNamespace(checkpoint={"channel_values": {"messages": [AIMessage(id="a1", content="connected")]}})
+    checkpointer = SimpleNamespace(aget_tuple=mocker.AsyncMock(return_value=checkpoint))
+    sdk = SimpleNamespace(checkpointer=checkpointer, resolve_agent=mocker.AsyncMock(side_effect=AssertionError("History must not initialize plugins")))
 
     from dingent.core.llms import service as llm_service
     from dingent.server.api.routers.frontend import threads as chat_threads
 
-    monkeypatch.setattr(llm_service, "get_llm_for_context", lambda **_kwargs: object())
-    client.app.dependency_overrides[chat_threads.get_copilot_sdk] = lambda: _DummySDK()
+    resolve_model = mocker.patch.object(llm_service, "get_llm_for_context", side_effect=AssertionError("History must not resolve a model"))
+    client.app.dependency_overrides[chat_threads.get_copilot_sdk] = lambda: sdk
 
     payload = {
         "threadId": thread_id,
@@ -538,7 +538,103 @@ def test_connect_streams_thread_snapshot_events(client: TestClient, session, mon
 
     assert response.status_code == 200
     encoder = EventEncoder(accept="text/event-stream")
-    assert response.text == encoder.encode(messages_event)
+    assert response.text == "".join(
+        encoder.encode(event)
+        for event in [
+            RunStartedEvent(type=EventType.RUN_STARTED, thread_id=thread_id, run_id="run-connect-1"),
+            messages_event,
+            RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=thread_id, run_id="run-connect-1"),
+        ]
+    )
+    checkpointer.aget_tuple.assert_awaited_once_with({"configurable": {"thread_id": thread_id, "checkpoint_ns": ""}})
+    sdk.resolve_agent.assert_not_called()
+    resolve_model.assert_not_called()
+
+
+@pytest.mark.parametrize("case, expected_status", [("new", 200), ("empty", 200), ("visitor", 403), ("workspace", 403), ("registered", 403), ("invalid", 400), ("anonymous", 400)])
+def test_connect_history_preserves_access_checks_and_does_not_create_threads(client: TestClient, session, mocker, case, expected_status):
+    from types import SimpleNamespace
+
+    from dingent.server.api.routers.frontend import threads as chat_threads
+
+    ws = _create_workspace(session=session, slug="ws-fast-history", allow_guest_access=True)
+    visitor = str(uuid.uuid4())
+    thread_id = str(uuid.uuid4())
+    if case not in {"new", "invalid", "anonymous"}:
+        owner_workspace = _create_workspace(session=session, slug="ws-other-history", allow_guest_access=True) if case == "workspace" else ws
+        _create_conversation(
+            session=session,
+            workspace_id=owner_workspace.id,
+            conversation_id=uuid.UUID(thread_id),
+            visitor_id=str(uuid.uuid4()) if case == "visitor" else visitor,
+            user_id=uuid.uuid4() if case == "registered" else None,
+        )
+    count_before = len(session.exec(select(Conversation)).all())
+    checkpointer = SimpleNamespace(aget_tuple=mocker.AsyncMock(return_value=None))
+    client.app.dependency_overrides[chat_threads.get_copilot_sdk] = lambda: SimpleNamespace(checkpointer=checkpointer)
+    headers = {"Accept": "text/event-stream"}
+    if case != "anonymous":
+        headers["X-Visitor-ID"] = visitor
+    response = client.post(
+        f"/api/v1/{ws.slug}/chat/agent/default/connect",
+        json={
+            "threadId": "not-a-uuid" if case == "invalid" else thread_id,
+            "runId": "reload",
+            "parentRunId": None,
+            "state": {},
+            "messages": [],
+            "tools": [],
+            "context": [],
+            "forwardedProps": {},
+        },
+        headers=headers,
+    )
+    assert response.status_code == expected_status
+    assert len(session.exec(select(Conversation)).all()) == count_before
+    if case == "empty":
+        checkpointer.aget_tuple.assert_awaited_once()
+    else:
+        checkpointer.aget_tuple.assert_not_called()
+    if expected_status == 200:
+        assert '"messages":[]' in response.text
+        assert "RUN_FINISHED" in response.text
+
+
+def test_connect_reads_real_sqlite_history_including_reasoning_and_activity(client: TestClient, session, mocker):
+    from langchain_core.messages import HumanMessage
+    from langgraph.graph import END, START, StateGraph
+
+    from dingent.engine.agents.messages import ActivityMessage
+
+    ws = _create_workspace(session=session, slug="ws-sqlite-history", allow_guest_access=True)
+    visitor = str(uuid.uuid4())
+    thread_id = str(uuid.uuid4())
+    _create_conversation(session=session, workspace_id=ws.id, visitor_id=visitor, conversation_id=uuid.UUID(thread_id))
+    sdk = client.app.state.copilot_sdk
+    resolve_agent = mocker.spy(sdk, "resolve_agent")
+    builder = StateGraph(MainState)
+    builder.add_node("noop", lambda _state: {})
+    builder.add_edge(START, "noop")
+    builder.add_edge("noop", END)
+    graph = builder.compile(checkpointer=sdk.checkpointer)
+    messages = [
+        HumanMessage(id="question", content="Find records"),
+        AIMessage(id="answer", content=[{"type": "text", "text": "First "}, {"type": "text", "text": "second"}], additional_kwargs={"reasoning_content": "summary"}),
+        ActivityMessage(id="table:activity", content=[{"title": "Records", "a2ui_operations": []}]),
+    ]
+    client.portal.call(graph.aupdate_state, {"configurable": {"thread_id": thread_id}}, {"messages": messages})
+    response = client.post(
+        f"/api/v1/{ws.slug}/chat/agent/default/connect",
+        json={"threadId": thread_id, "runId": "reload", "state": {}, "messages": [], "tools": [], "context": [], "forwardedProps": {}},
+        headers={"Accept": "text/event-stream", "X-Visitor-ID": visitor},
+    )
+    assert response.status_code == 200
+    assert "First second" in response.text
+    assert "summary" in response.text
+    assert '"role":"activity"' in response.text
+    assert "Records" in response.text
+    assert "RUN_FINISHED" in response.text
+    resolve_agent.assert_not_called()
 
 
 def test_run_returns_400_for_invalid_thread_id(client: TestClient, session, monkeypatch):

@@ -41,6 +41,10 @@ import { useTranslations } from "next-intl";
 import { ChatStarterSuggestions } from "./ChatStarterSuggestions";
 import { DingentChatMessageView } from "./DingentChatMessageView";
 import {
+  HistoryAwareChatView,
+  HistoryLoadingContext,
+} from "./HistoryAwareChatView";
+import {
   RunProgressContext,
   type RunProgressState,
   type ExecutionStep,
@@ -198,6 +202,7 @@ function getActivityLabel(content: unknown): string | undefined {
 
 function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
   const t = useTranslations("Chat");
+  const common = useTranslations("Common");
   const translationsRef = useRef(t);
   translationsRef.current = t;
   const searchParams = useSearchParams();
@@ -783,7 +788,20 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     function UrlAwareMessageView(props: CopilotChatMessageViewProps) {
       // Context updates cross CopilotKit's memoized slot without remounting it.
       const progress = useContext(RunProgressContext);
+      const isLoadingHistory = useContext(HistoryLoadingContext);
       if (!progress) return null;
+      if (isLoadingHistory) {
+        return (
+          <div
+            data-testid="chat-history-loading"
+            role="status"
+            aria-live="polite"
+            className="px-4 py-8 text-sm text-muted-foreground"
+          >
+            {common("loading")}
+          </div>
+        );
+      }
       const currentThreadId = activeThreadIdRef.current;
       const urlQuestion = urlQuestionMessageRef.current;
       const visibleMessages = mergeStreamingActivities(
@@ -852,7 +870,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
     const component = UrlAwareMessageView as typeof DingentChatMessageView;
     component.Cursor = DingentChatMessageView.Cursor;
     return component;
-  }, [t]);
+  }, [t, common]);
 
   if (isGuest && !visitorId) {
     return (
@@ -882,6 +900,7 @@ function ChatPageContent({ isGuest, visitorId, slug }: ChatPageProps) {
               threadId={activeThreadId}
               attachments={CHAT_IMAGE_ATTACHMENTS}
               labels={copilotLabels}
+              chatView={HistoryAwareChatView}
               messageView={messageView}
               onStop={stopCurrentRun}
               className="h-full min-h-0 w-full bg-background"

@@ -67,6 +67,45 @@ test("guest chat completes a real browser/backend flow and can switch conversati
     "Get data and analyze it from the browser",
   );
 
+  let releaseHistory!: () => void;
+  const historyGate = new Promise<void>((resolve) => {
+    releaseHistory = resolve;
+  });
+  const connectRoute = /\/chat\/agent\/.*\/connect$/;
+  await page.route(connectRoute, async (route) => {
+    await historyGate;
+    await route.continue();
+  });
+  try {
+    await page.reload();
+    await expect(page.getByTestId("chat-history-loading")).toBeVisible();
+    const sendWhileLoading = page.getByTestId("copilot-send-button");
+    await input.fill("Draft while loading");
+    await expect(input).toHaveValue("Draft while loading");
+    await expect(sendWhileLoading).toBeDisabled();
+    await expect(sendWhileLoading.locator("svg.lucide-square")).toHaveCount(0);
+    await expect(page.getByText("How can I help you today?")).not.toBeVisible();
+    await page.screenshot({ path: test.info().outputPath("history-loading.png") });
+  } finally {
+    releaseHistory();
+  }
+  await expect(page.getByTestId("chat-history-loading")).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Reviewer final answer: browser e2e completed with mocked LLM output.",
+    ),
+  ).toBeVisible();
+  await expect(input).toHaveValue("Draft while loading");
+  await expect(sendButton).toBeEnabled();
+  const restoredState = await (
+    await request.get(`http://127.0.0.1:${backendPort}/api/v1/__e2e__/state`)
+  ).json();
+  expect(restoredState.receivedMessages).toHaveLength(3);
+  expect(restoredState.boundToolNames).toHaveLength(3);
+  await page.screenshot({ path: test.info().outputPath("history-restored.png") });
+  await page.unroute(connectRoute);
+  await input.fill("");
+
   await page.getByText("New Chat").first().click();
   await expect(
     page.getByText(

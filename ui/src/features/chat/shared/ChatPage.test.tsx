@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatPage } from "./ChatPage";
 import type { ExecutionTraceData } from "./ThinkingAccordion";
+import { HistoryLoadingContext } from "./HistoryAwareChatView";
 
 const updateThreadTitle = vi.fn();
 const addMessage = vi.fn();
@@ -23,6 +24,7 @@ let activeThreadId = "thread-1";
 let workflowName = "workflow-agent";
 let translationRevision = 0;
 let copilotIsRunning = false;
+let historyIsLoading = false;
 let currentSearchParams = new URLSearchParams();
 let agentSubscriber: {
   onToolCallStartEvent?: (input: { event: any }) => undefined;
@@ -85,12 +87,21 @@ vi.mock("next-intl", async (importOriginal) => {
     messages,
     namespace: "Chat",
   });
+  const commonTranslate = actual.createTranslator({
+    locale: "en",
+    messages,
+    namespace: "Common",
+  });
   // Keep the translator stable, as next-intl does between locale changes.
   return {
     ...actual,
     useLocale: () => "en",
-    useTranslations: () =>
-      translationRevision ? alternateTranslate : translate,
+    useTranslations: (namespace: string) =>
+      namespace === "Common"
+        ? commonTranslate
+        : translationRevision
+          ? alternateTranslate
+          : translate,
   };
 });
 
@@ -118,6 +129,7 @@ vi.mock("@copilotkit/react-core/v2", async () => {
     }) => <Component {...props} />,
   );
   return {
+    CopilotChatView: () => null,
     useAgent: () => ({
       agent: mockedAgent,
     }),
@@ -155,13 +167,15 @@ vi.mock("@copilotkit/react-core/v2", async () => {
           <div data-testid="copilot-chat">
             {agentId}:{threadId}
           </div>
-          {MessageView && (
-            <MemoizedMessageSlot
-              component={MessageView}
-              messages={agentMessages}
-              isRunning={copilotIsRunning}
-            />
-          )}
+          <HistoryLoadingContext.Provider value={historyIsLoading}>
+            {MessageView && (
+              <MemoizedMessageSlot
+                component={MessageView}
+                messages={agentMessages}
+                isRunning={copilotIsRunning}
+              />
+            )}
+          </HistoryLoadingContext.Provider>
         </div>
       );
     },
@@ -240,7 +254,26 @@ vi.mock("./DingentChatMessageView", () => {
 });
 
 describe("ChatPage", () => {
+  it("shows history loading instead of starter questions or a running indicator", () => {
+    historyIsLoading = true;
+    copilotIsRunning = true;
+    agentMessages = [];
+    const { rerender } = render(<ChatPage />);
+    expect(screen.getByRole("status")).toHaveTextContent("Loading...");
+    expect(
+      screen.queryByText("How can I help you today?"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+    historyIsLoading = false;
+    copilotIsRunning = false;
+    agentMessages = [...defaultAgentMessages];
+    rerender(<ChatPage />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByTestId("message-view")).toHaveTextContent("Done");
+  });
+
   afterEach(() => {
+    historyIsLoading = false;
     window.localStorage.removeItem("dingent.debugActivitySnapshot");
     activeThreadId = "thread-1";
     workflowName = "workflow-agent";

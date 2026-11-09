@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
+from ag_ui.core import EventType, MessagesSnapshotEvent, RunFinishedEvent, RunStartedEvent
 from ag_ui.core.types import RunAgentInput
 from ag_ui.encoder import EventEncoder
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
@@ -25,7 +26,7 @@ from dingent.server.api.dependencies import (
     DbSession,
     get_visitor_id,
 )
-from dingent.server.copilot.agents import DingLangGraphAGUIAgent
+from dingent.server.copilot.agents import DingLangGraphAGUIAgent, ding_langchain_messages_to_agui
 from dingent.server.services.copilotkit_service import CopilotKitSdk
 from dingent.server.services.transcription_service import (
     TranscriptionFailedError,
@@ -76,32 +77,18 @@ async def get_workflow_spec(workflow: Workflow | None) -> ExecutableWorkflow:
     return workflow.to_spec()
 
 
-async def get_agent_context(
-    agent_id: str,
+def _get_chat_conversation(
     input_data: RunAgentInput,
-    request: Request,
-    sdk: CopilotSDK,
     session: DbSession,
     user: CurrentUserOptional,
     workspace: CurrentWorkspaceAllowGuest,
-    visitor_id: str | None = Header(None, alias="X-Visitor-ID"),
-) -> AgentContext:
-    logger.info(
-        "Preparing chat agent run: agent_id={}, thread_id={}, run_id={}, workspace_id={}, workspace_slug={}, user_id={}, visitor_id_present={}",
-        agent_id,
-        input_data.thread_id,
-        input_data.run_id,
-        workspace.id,
-        workspace.slug,
-        getattr(user, "id", None),
-        bool(visitor_id),
-    )
-
-    # --- A. 验证 thread_id ---
+    visitor_id: str | None,
+    *,
+    create: bool,
+) -> Conversation | None:
     try:
         thread_uuid = uuid.UUID(input_data.thread_id)
     except ValueError:
-        logger.warning("Invalid chat thread_id: agent_id={}, thread_id={}", agent_id, input_data.thread_id)
         raise HTTPException(status_code=400, detail="Invalid thread_id format")
 
     conversation = session.exec(select(Conversation).where(Conversation.id == thread_uuid)).first()
@@ -124,6 +111,10 @@ async def get_agent_context(
                 raise HTTPException(status_code=403, detail="You do not have permission to access this conversation.")
 
     else:
+        if not user and not visitor_id:
+            raise HTTPException(status_code=400, detail="Authentication or X-Visitor-ID required")
+        if not create:
+            return None
         # === 创建逻辑合并 ===
         new_conversation = Conversation(
             id=thread_uuid,
@@ -143,6 +134,32 @@ async def get_agent_context(
         session.commit()
         session.refresh(new_conversation)
         conversation = new_conversation
+
+    return conversation
+
+
+async def get_agent_context(
+    agent_id: str,
+    input_data: RunAgentInput,
+    request: Request,
+    sdk: CopilotSDK,
+    session: DbSession,
+    user: CurrentUserOptional,
+    workspace: CurrentWorkspaceAllowGuest,
+    visitor_id: str | None = Header(None, alias="X-Visitor-ID"),
+) -> AgentContext:
+    logger.info(
+        "Preparing chat agent run: agent_id={}, thread_id={}, run_id={}, workspace_id={}, workspace_slug={}, user_id={}, visitor_id_present={}",
+        agent_id,
+        input_data.thread_id,
+        input_data.run_id,
+        workspace.id,
+        workspace.slug,
+        getattr(user, "id", None),
+        bool(visitor_id),
+    )
+    conversation = _get_chat_conversation(input_data, session, user, workspace, visitor_id, create=True)
+    assert conversation is not None
 
     # --- C. 解析 Agent ---
     workflow = get_workflow_by_name(session, agent_id, workspace.id)
@@ -305,14 +322,37 @@ async def run(
 
 @router.post("/agent/{agent_id}/connect")
 async def connect(
-    ctx: AgentContext = Depends(get_agent_context),
+    agent_id: str,
+    input_data: RunAgentInput,
+    request: Request,
+    sdk: CopilotSDK,
+    session: DbSession,
+    user: CurrentUserOptional,
+    workspace: CurrentWorkspaceAllowGuest,
+    visitor_id: str | None = Header(None, alias="X-Visitor-ID"),
 ):
-    async def event_generator():
-        async for event in ctx.agent.get_thread_messages(ctx.input_data.thread_id, ctx.input_data.run_id):
-            encoded_event = ctx.encoder.encode(cast(Any, event))
-            yield encoded_event
+    conversation = _get_chat_conversation(input_data, session, user, workspace, visitor_id, create=False)
+    workflow = get_workflow_by_name(session, agent_id, workspace.id)
+    if not workflow and agent_id != "default":
+        raise HTTPException(status_code=404, detail=f"Workflow '{agent_id}' not found")
 
-    return StreamingResponse(event_generator(), media_type=ctx.encoder.get_content_type())
+    # Restoring persisted history must not construct models or connect plugin tools.
+    checkpoint = None
+    if conversation is not None:
+        checkpoint = await sdk.checkpointer.aget_tuple({"configurable": {"thread_id": input_data.thread_id, "checkpoint_ns": ""}})
+    messages = checkpoint.checkpoint.get("channel_values", {}).get("messages", []) if checkpoint else []
+    encoder = EventEncoder(accept=cast(str, request.headers.get("accept")))
+    events = [
+        RunStartedEvent(type=EventType.RUN_STARTED, thread_id=input_data.thread_id, run_id=input_data.run_id),
+        MessagesSnapshotEvent(type=EventType.MESSAGES_SNAPSHOT, messages=ding_langchain_messages_to_agui(messages)),
+        RunFinishedEvent(type=EventType.RUN_FINISHED, thread_id=input_data.thread_id, run_id=input_data.run_id),
+    ]
+
+    async def event_generator():
+        for event in events:
+            yield encoder.encode(event)
+
+    return StreamingResponse(event_generator(), media_type=encoder.get_content_type(), headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache, no-transform"})
 
 
 @router.get("/threads", response_model=list[ThreadRead])
