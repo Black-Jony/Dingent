@@ -1,0 +1,16 @@
+[project]
+name = "dingent-multi-database-plugin"
+version = "1.0.0"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastmcp==3.0.0b1",
+    "langchain-community>=0.4,<0.5",
+    "sqlalchemy>=2.0,<2.1",
+    "pymysql>=1.1,<2",
+    "python-dotenv>=1.1,<2",
+    "sqlglot>=26,<31",
+    "loguru>=0.7,<1",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.4,<9", "pytest-mock>=3.14,<4", "pytest-asyncio>=0.26,<1"]

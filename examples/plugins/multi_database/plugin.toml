@@ -1,0 +1,12 @@
+[plugin]
+id = "multi-database"
+display_name = "多数据库查询"
+description = "通过独立连接查询多个 MySQL 数据库；按工具前缀选择业务数据源"
+version = "1.0.0"
+spec_version = "2.0"
+auto_table = false
+
+[plugin.server]
+transport = "stdio"
+command = "uv"
+args = ["run", "--locked", "--no-dev", "main.py"]
