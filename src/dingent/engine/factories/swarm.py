@@ -8,6 +8,7 @@ from loguru import logger
 from dingent.core.assistants.assistant_factory import AssistantFactory
 from dingent.core.utils import normalize_agent_name
 from dingent.core.workflows.schemas import ExecutableWorkflow
+from dingent.engine.agents.input_translation import TRANSLATION_PLUGIN_ID, TRANSLATION_TOOL_NAME, InputTranslationMiddleware
 from dingent.engine.agents.simple_agent import build_simple_react_agent
 from dingent.engine.agents.tools import create_handoff_tool
 
@@ -37,11 +38,21 @@ async def create_assistant_graphs(
     async with AsyncExitStack() as stack:
         for name, assistant_config in workflow.assistant_configs.items():
             logger.info("Preparing assistant graph: workflow={}, assistant={}", workflow.name, name)
-            rt = await assistant_factory.create_runtime(assistant_config)
+            translation_plugin = next((p for p in assistant_config.plugins if p.registry_id == TRANSLATION_PLUGIN_ID), None)
+            translation_enabled = (
+                translation_plugin is not None
+                and translation_plugin.enabled
+                and all(config.get("enabled", True) for config in translation_plugin.tool_configs if config["name"] == TRANSLATION_TOOL_NAME)
+            )
+            runtime_config = assistant_config
+            if translation_plugin is not None and not translation_enabled:
+                runtime_config = assistant_config.model_copy(update={"plugins": [p for p in assistant_config.plugins if p.registry_id != TRANSLATION_PLUGIN_ID]})
+            rt = await assistant_factory.create_runtime(runtime_config)
             raw_tools = await stack.enter_async_context(rt.load_tools())
 
-            tool_configs = {tc["name"]: tc for p in assistant_config.plugins for tc in p.tool_configs}
+            tool_configs = {tc["name"]: tc for p in runtime_config.plugins if p.registry_id != TRANSLATION_PLUGIN_ID for tc in p.tool_configs}
             transformed_tools: list[BaseTool] = []
+            translation_tool: BaseTool | None = None
             for tool in raw_tools:
                 config = tool_configs.get(tool.tool.name)
                 original_tool = tool.tool
@@ -55,12 +66,18 @@ async def create_assistant_graphs(
 
                 original_tool.coroutine = run_adapter
 
+                if translation_enabled and tool.plugin_id == TRANSLATION_PLUGIN_ID and original_tool.name == TRANSLATION_TOOL_NAME:
+                    translation_tool = original_tool
+                    continue
                 if config:
                     if "enabled" in config and not config["enabled"]:
                         continue
                     if "description" in config and config["description"]:
                         tool.tool.description = config["description"]
                 transformed_tools.append(original_tool)
+
+            if translation_enabled and translation_tool is None:
+                raise ValueError("The translation plugin is enabled but unavailable. Check its installation and try again.")
 
             # 筛选相关的 Handoff 工具
 
@@ -96,6 +113,7 @@ async def create_assistant_graphs(
                 llm=llm,
                 tools=handoff_tools + transformed_tools,
                 system_prompt=assistant_config.instructions,
+                input_middleware=InputTranslationMiddleware(translation_tool) if translation_enabled and translation_tool is not None else None,
             )
             assistant_graphs[name] = agent
             logger.info("Assistant graph ready: workflow={}, assistant={}, total_tools={}", workflow.name, name, len(handoff_tools) + len(transformed_tools))

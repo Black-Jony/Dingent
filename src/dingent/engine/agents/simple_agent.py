@@ -501,13 +501,15 @@ def build_simple_react_agent(
     tools: list[BaseTool],
     system_prompt: str | None = None,
     debug: bool = False,
+    *,
+    input_middleware: AgentMiddleware | None = None,
 ) -> CompiledStateGraph:
     logger.info("Building simple react agent: name={}, tool_count={}, has_system_prompt={}", name, len(tools), bool(system_prompt))
     agent = create_agent(
         model=llm,
         tools=tools,
         system_prompt=system_prompt,
-        middleware=middleware,
+        middleware=[input_middleware, *middleware] if input_middleware is not None else middleware,
         debug=debug,
     )
     agent.name = name

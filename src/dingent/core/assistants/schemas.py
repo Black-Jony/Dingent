@@ -51,6 +51,7 @@ class PluginUpdateOnAssistant(SQLModel):
 
 
 class PluginSpec(SQLModel):
+    enabled: bool = True
     plugin_id: str
     registry_id: str
     config: dict[str, Any]

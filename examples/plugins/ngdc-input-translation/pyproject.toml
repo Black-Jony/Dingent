@@ -1,0 +1,5 @@
+[project]
+name = "dingent-ngdc-input-translation"
+version = "1.0.0"
+requires-python = ">=3.12,<3.14"
+dependencies = ["fastmcp==3.0.0b1", "aiohttp>=3.13.3,<4"]

@@ -1,0 +1,12 @@
+[plugin]
+id = "ngdc-input-translation"
+display_name = "NGDC 对话翻译"
+description = "调用模型前将当前提问和历史用户提问发送给 NGDC 翻译成英语；聊天记录保留原文。"
+version = "1.0.0"
+spec_version = "2.0"
+auto_table = false
+
+[plugin.server]
+transport = "stdio"
+command = "uv"
+args = ["run", "--locked", "--no-dev", "main.py"]

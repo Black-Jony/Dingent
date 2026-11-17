@@ -182,6 +182,7 @@ class AssistantPluginLink(SQLModel, table=True):
     def to_spec(self) -> PluginSpec:
         return PluginSpec(
             plugin_id=self.plugin.registry_id,
+            enabled=self.enabled,
             registry_id=self.plugin.registry_id,
             config=self.user_plugin_config or {},
             tool_configs=self.tool_configs,

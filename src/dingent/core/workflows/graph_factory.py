@@ -15,7 +15,19 @@ from langgraph_swarm import create_swarm
 from dingent.core.assistants.assistant_factory import AssistantFactory
 from dingent.core.workflows.schemas import ExecutableWorkflow
 from dingent.engine import create_assistant_graphs
+from dingent.engine.agents.input_translation import InputTranslationError
+from dingent.engine.agents.response_language import normalize_response_locale
 from dingent.engine.agents.state import MainState
+
+_TRANSLATION_FAILURE = {
+    "en": "Could not translate the question. Please try again.",
+    "zh-CN": "暂时无法翻译问题，请重试。",
+    "fr": "Impossible de traduire la question. Veuillez réessayer.",
+    "ja": "質問を翻訳できませんでした。もう一度お試しください。",
+    "ru": "Не удалось перевести вопрос. Попробуйте ещё раз.",
+    "ar": "تعذرت ترجمة السؤال. يرجى المحاولة مرة أخرى.",
+    "es": "No se pudo traducir la pregunta. Inténtalo de nuevo.",
+}
 
 
 @dataclass
@@ -128,6 +140,9 @@ class GraphFactory:
                 # HACK:
                 config["recursion_limit"] = 1000
                 return await compiled_swarm.ainvoke(state, config=config)
+            except InputTranslationError:
+                locale = normalize_response_locale(config.get("configurable", {}).get("response_locale")) or "en"
+                return {"messages": [AIMessage(content=_TRANSLATION_FAILURE[locale], additional_kwargs={"error": True, "error_type": "InputTranslationError"})]}
             except Exception as e:
                 import traceback
 
