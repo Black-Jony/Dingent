@@ -39,13 +39,47 @@ test("guest chat completes a real browser/backend flow and can switch conversati
   await input.fill("Get data and analyze it from the browser");
   const sendButton = page.getByTestId("copilot-send-button");
   await expect(sendButton).toBeEnabled();
-  await sendButton.click();
+  const waitingIndicator = page.getByTestId("chat-waiting-indicator");
+  await expect(waitingIndicator).toHaveCount(0);
+  let releaseRun!: () => void;
+  const runGate = new Promise<void>((resolve) => {
+    releaseRun = resolve;
+  });
+  const runRoute = /\/chat\/agent\/.*\/run$/;
+  await page.route(runRoute, async (route) => {
+    await runGate;
+    await route.continue();
+  });
+  try {
+    await sendButton.click();
+    // Even before response headers arrive, the real submission must show progress.
+    await expect(waitingIndicator).toBeVisible();
+    await page.screenshot({
+      path: test.info().outputPath("waiting-for-answer.png"),
+    });
+    const desktopViewport = page.viewportSize()!;
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(waitingIndicator).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath("waiting-mobile.png"),
+    });
+    await page.setViewportSize(desktopViewport);
+  } finally {
+    releaseRun();
+  }
 
   await expect(
     page.getByText(
       "Reviewer final answer: browser e2e completed with mocked LLM output.",
     ),
   ).toBeVisible({ timeout: 30_000 });
+  await expect(waitingIndicator).toHaveCount(0);
+  await page.unroute(runRoute);
   await expect(
     page
       .getByTestId("copilot-user-message")
@@ -79,13 +113,16 @@ test("guest chat completes a real browser/backend flow and can switch conversati
   try {
     await page.reload();
     await expect(page.getByTestId("chat-history-loading")).toBeVisible();
+    await expect(waitingIndicator).toHaveCount(0);
     const sendWhileLoading = page.getByTestId("copilot-send-button");
     await input.fill("Draft while loading");
     await expect(input).toHaveValue("Draft while loading");
     await expect(sendWhileLoading).toBeDisabled();
     await expect(sendWhileLoading.locator("svg.lucide-square")).toHaveCount(0);
     await expect(page.getByText("How can I help you today?")).not.toBeVisible();
-    await page.screenshot({ path: test.info().outputPath("history-loading.png") });
+    await page.screenshot({
+      path: test.info().outputPath("history-loading.png"),
+    });
   } finally {
     releaseHistory();
   }
@@ -97,12 +134,15 @@ test("guest chat completes a real browser/backend flow and can switch conversati
   ).toBeVisible();
   await expect(input).toHaveValue("Draft while loading");
   await expect(sendButton).toBeEnabled();
+  await expect(waitingIndicator).toHaveCount(0);
   const restoredState = await (
     await request.get(`http://127.0.0.1:${backendPort}/api/v1/__e2e__/state`)
   ).json();
   expect(restoredState.receivedMessages).toHaveLength(3);
   expect(restoredState.boundToolNames).toHaveLength(3);
-  await page.screenshot({ path: test.info().outputPath("history-restored.png") });
+  await page.screenshot({
+    path: test.info().outputPath("history-restored.png"),
+  });
   await page.unroute(connectRoute);
   await input.fill("");
 
@@ -112,6 +152,7 @@ test("guest chat completes a real browser/backend flow and can switch conversati
       "Reviewer final answer: browser e2e completed with mocked LLM output.",
     ),
   ).not.toBeVisible();
+  await expect(waitingIndicator).toHaveCount(0);
 
   await input.fill("Start a second browser conversation");
   await expect(sendButton).toBeEnabled();

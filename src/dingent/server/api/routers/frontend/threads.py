@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, cast
 
 from ag_ui.core import EventType, MessagesSnapshotEvent, RunFinishedEvent, RunStartedEvent
-from ag_ui.core.types import RunAgentInput
+from ag_ui.core.types import RunAgentInput, TextInputContent
 from ag_ui.encoder import EventEncoder
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -60,15 +60,29 @@ class AgentContext:
 
 def update_conversation_title(conversation: Conversation, input_data: RunAgentInput, max_length: int = 50) -> None:
     """
-    Update conversation title based on first message if title is "New Chat".
+    Use the first nonempty user text as the title, never media payloads.
 
     Args:
         conversation: The conversation object to update
         input_data: The input data containing messages
         max_length: Maximum length for the title (default: 50)
     """
-    if conversation.title == "New Chat" and input_data.messages:
-        conversation.title = cast(str, input_data.messages[0].content)[:max_length]
+    if conversation.title != "New Chat":
+        return
+    for message in input_data.messages:
+        if message.role != "user":
+            continue
+        content = message.content
+        if isinstance(content, str):
+            text = content
+        elif isinstance(content, list):
+            text = " ".join(part.text for part in content if isinstance(part, TextInputContent))
+        else:
+            continue
+        title = " ".join(text.split())
+        if title:
+            conversation.title = title[:max_length]
+            return
 
 
 async def get_workflow_spec(workflow: Workflow | None) -> ExecutableWorkflow:

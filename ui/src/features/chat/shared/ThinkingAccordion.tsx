@@ -1,7 +1,21 @@
 "use client";
 
-import { useTranslations } from "next-intl";
-import { Check, ChevronDown, Circle, Loader2, Square, X } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import {
+  ChartNoAxesCombined,
+  Check,
+  ChevronDown,
+  Circle,
+  Database,
+  FileText,
+  Globe,
+  Lightbulb,
+  Loader2,
+  Search,
+  Square,
+  Wrench,
+  X,
+} from "lucide-react";
 import {
   createContext,
   useContext,
@@ -26,6 +40,8 @@ export interface ExecutionTraceData {
   executionSteps?: ExecutionStep[];
   executionFailed?: boolean;
   executionStopped?: boolean;
+  executionStartedAt?: number;
+  executionDurationMs?: number;
 }
 
 export interface RunProgressState {
@@ -36,6 +52,8 @@ export interface RunProgressState {
   executionSteps: ExecutionStep[];
   executionFailed: boolean;
   executionStopped?: boolean;
+  executionStartedAt?: number;
+  executionDurationMs?: number;
 }
 
 export const RunProgressContext = createContext<RunProgressState | null>(null);
@@ -50,29 +68,49 @@ interface ThinkingAccordionProps {
   steps?: ExecutionStep[];
   failed?: boolean;
   stopped?: boolean;
+  startedAt?: number;
+  durationMs?: number;
 }
+
+function toolIcon(name: string = "") {
+  if (/chart|plot|sankey|visual/i.test(name)) return ChartNoAxesCombined;
+  if (/database|query|index|annotation/i.test(name)) return Database;
+  if (/browse|fetch_url|webpage|website/i.test(name)) return Globe;
+  if (/search|lookup|find/i.test(name)) return Search;
+  if (/file|document|read|paper/i.test(name)) return FileText;
+  return Wrench;
+}
+
 export function ThinkingAccordion({
   messageId,
-  content,
-  isThinking = false,
+  content: initialContent,
+  isThinking: initialThinking = false,
   defaultExpanded = false,
   className,
   label,
-  steps = [],
-  failed = false,
-  stopped = false,
+  steps: initialSteps = [],
+  failed: initialFailed = false,
+  stopped: initialStopped = false,
+  startedAt: initialStartedAt,
+  durationMs: initialDurationMs,
 }: ThinkingAccordionProps) {
   const progress = useContext(RunProgressContext);
   // The library's assistant-message cache ignores custom trace metadata.
-  if (progress && progress.messageId === messageId) {
-    content = progress.thinkingText;
-    steps = progress.executionSteps;
-    failed = progress.executionFailed;
-    stopped = Boolean(progress.executionStopped);
-    isThinking = !progress.runHasEnded && (isThinking || progress.isThinking);
-  }
+  const live = progress?.messageId === messageId ? progress : null;
+  const content = live ? live.thinkingText : initialContent;
+  const steps = live ? live.executionSteps : initialSteps;
+  const failed = live ? live.executionFailed : initialFailed;
+  const stopped = live ? Boolean(live.executionStopped) : initialStopped;
+  const isThinking = live
+    ? !live.runHasEnded && (initialThinking || live.isThinking)
+    : initialThinking;
+  const startedAt = live ? live.executionStartedAt : initialStartedAt;
+  const durationMs = live ? live.executionDurationMs : initialDurationMs;
   const t = useTranslations("Chat.thinking");
-  const [isExpanded, setIsExpanded] = useState(defaultExpanded);
+  const locale = useLocale();
+  const [isExpanded, setIsExpanded] = useState(defaultExpanded || isThinking);
+  const previousRunning = useRef(isThinking);
+  const [now, setNow] = useState(Date.now);
   const scrollRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
   const groups = useMemo(() => {
@@ -96,17 +134,37 @@ export function ThinkingAccordion({
           ? t("failed")
           : t("completed"));
   const hasDetails = Boolean(content.trim() || groups.length);
+  const elapsed =
+    durationMs ??
+    (isThinking && startedAt != null
+      ? Math.max(0, now - startedAt)
+      : undefined);
+  const elapsedLabel =
+    elapsed == null
+      ? null
+      : new Intl.NumberFormat(locale, {
+          style: "unit",
+          unit: "second",
+          unitDisplay: "short",
+          maximumFractionDigits: 0,
+        }).format(Math.max(0, elapsed) / 1000);
 
   useEffect(() => {
-    if (!isThinking) setIsExpanded(false);
+    if (previousRunning.current !== isThinking) setIsExpanded(isThinking);
+    previousRunning.current = isThinking;
   }, [isThinking]);
+  useEffect(() => {
+    if (!isThinking || startedAt == null || !hasDetails) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isThinking, startedAt, hasDetails]);
   useEffect(() => {
     if (isThinking && isExpanded && scrollRef.current) {
       const element = scrollRef.current;
       element.scrollTop = element.scrollHeight;
     }
   }, [content, steps, isExpanded, isThinking]);
-  if (!hasDetails && (isThinking || failed || stopped)) {
+  if (!hasDetails && (failed || stopped)) {
     return (
       <div
         className={twMerge(
@@ -138,7 +196,7 @@ export function ThinkingAccordion({
   return (
     <div
       data-execution-trace
-      className={twMerge("my-2 w-full min-w-0 text-sm", className)}
+      className={twMerge("my-3 w-full min-w-0 text-sm", className)}
     >
       <button
         onClick={(e) => {
@@ -170,6 +228,14 @@ export function ThinkingAccordion({
         <span className="min-w-0 flex-1 truncate" aria-live="polite">
           {displayLabel}
         </span>
+        {elapsedLabel && (
+          <span
+            data-execution-duration
+            className="shrink-0 text-xs tabular-nums text-muted-foreground"
+          >
+            {elapsedLabel}
+          </span>
+        )}
         {groups.length > 0 && (
           <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
             {t("stepCount", { count: groups.length })}
@@ -184,10 +250,24 @@ export function ThinkingAccordion({
         <div
           ref={scrollRef}
           id={panelId}
-          className="mt-2 max-h-64 overflow-y-auto overscroll-contain pb-1 pe-2"
+          className="mt-1 max-h-80 space-y-3 overflow-y-auto overscroll-contain pb-1 pe-2"
         >
-          {groups.length > 0 ? (
-            <ol className="ms-1.5 space-y-3 border-s border-border/70 ps-5 py-1 text-[13px]">
+          {content.trim() && (
+            <div
+              data-model-reasoning
+              className="flex min-w-0 gap-3 py-1 text-[13px] leading-6 text-muted-foreground"
+            >
+              <Lightbulb
+                className="mt-1 size-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              <div className="min-w-0 flex-1 break-words [overflow-wrap:anywhere] [&_p]:my-1 [&_pre]:overflow-x-auto">
+                <Streamdown>{content}</Streamdown>
+              </div>
+            </div>
+          )}
+          {groups.length > 0 && (
+            <ol className="ms-1.5 space-y-2.5 border-s border-border/60 ps-5 py-1 text-[13px]">
               {groups.map(({ key, calls }) => {
                 const active =
                   isThinking && calls.some((call) => call.status === "running");
@@ -195,6 +275,7 @@ export function ThinkingAccordion({
                   (call) => call.status === "complete",
                 );
                 const detail = calls.findLast((call) => call.detail)?.detail;
+                const Icon = toolIcon(calls[0].toolName);
                 return (
                   <li key={key} className="relative min-w-0 leading-5">
                     <span
@@ -212,7 +293,13 @@ export function ThinkingAccordion({
                     <div
                       className={`break-words ${active ? "font-medium text-foreground" : "text-muted-foreground"}`}
                     >
-                      {calls[0].label}
+                      <span className="flex items-start gap-2">
+                        <Icon
+                          className="mt-0.5 size-3.5 shrink-0 opacity-70"
+                          aria-hidden="true"
+                        />
+                        {calls[0].label}
+                      </span>
                     </div>
                     {calls.length > 1 ? (
                       <details className="mt-1 text-xs text-muted-foreground">
@@ -243,10 +330,6 @@ export function ThinkingAccordion({
                 );
               })}
             </ol>
-          ) : (
-            <div className="border-s border-border/70 ps-5 text-[13px] leading-relaxed text-muted-foreground [&>p]:my-1">
-              <Streamdown>{content}</Streamdown>
-            </div>
           )}
         </div>
       )}

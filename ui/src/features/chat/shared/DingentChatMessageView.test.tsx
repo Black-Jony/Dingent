@@ -32,7 +32,7 @@ const call = (id: string, name = "write_todos"): ToolCall => ({
 });
 
 describe("DingentChatMessageView", () => {
-  it("uses the empty Dingent cursor instead of the CopilotKit default cursor", () => {
+  it("uses the lifecycle-aware Dingent cursor instead of the CopilotKit default cursor", () => {
     expect(DingentChatMessageView.Cursor).toBe(ThinkingCursor);
   });
 

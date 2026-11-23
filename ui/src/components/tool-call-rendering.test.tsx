@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
 
+vi.mock("./A2UI/table-catalog", () => ({ tableCatalog: undefined }));
+
 // Mock dependencies
 vi.mock("@copilotkit/a2ui-renderer", () => ({
   A2UIProvider: ({ children }: { children: React.ReactNode }) => (

@@ -261,6 +261,11 @@
       "summary": "Résumez les données les plus importantes auxquelles ce workflow peut accéder.",
       "analysis": "Exécutez une analyse ciblée et expliquez le résultat."
     },
+    "genbaseStarter": {
+      "metadata": "Champs de soumission des métadonnées et résolution des erreurs",
+      "featureTable": "Remplissage des tableaux de caractéristiques d’annotation et résolution des erreurs",
+      "faq": "Réponses aux autres questions fréquentes"
+    },
     "analysisWorkspace": {
       "results": "Résultats de l'analyse",
       "expand": "Espace de travail ouvert dans l'analyse",

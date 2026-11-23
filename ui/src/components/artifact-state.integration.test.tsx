@@ -7,6 +7,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { createA2UIMessageRenderer } from "./MyA2UIMessageRenderer";
+
+vi.mock("./A2UI/table-catalog", () => ({ tableCatalog: undefined }));
 import {
   AnalysisWorkspaceProvider,
   AnalysisWorkspaceSlot,

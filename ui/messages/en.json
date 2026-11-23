@@ -261,6 +261,11 @@
       "summary": "Summarize the most important data this workflow can access.",
       "analysis": "Run a focused analysis and explain the result."
     },
+    "genbaseStarter": {
+      "metadata": "Metadata submission fields and error troubleshooting",
+      "featureTable": "Filling in annotation feature tables and troubleshooting errors",
+      "faq": "Answers to other frequently asked questions"
+    },
     "analysisWorkspace": {
       "results": "Analysis results",
       "expand": "Open in analysis workspace",

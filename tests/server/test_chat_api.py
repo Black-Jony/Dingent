@@ -317,6 +317,98 @@ def test_run_streams_agent_events_and_updates_conversation_title(client: TestCli
     assert conversation.visitor_id == visitor_id
 
 
+@pytest.mark.parametrize(
+    "messages, expected",
+    [
+        ([{"role": "user", "content": "  Describe\n this image  "}], "Describe this image"),
+        ([{"role": "user", "content": [{"type": "text", "text": "First"}, {"type": "text", "text": "second"}]}], "First second"),
+        ([{"role": "user", "content": "\u4e2d" * 60}], "\u4e2d" * 50),
+        ([{"role": "system", "content": "Internal instructions"}, {"role": "user", "content": "My question"}], "My question"),
+        ([{"role": "user", "content": "  "}], "New Chat"),
+        ([], "New Chat"),
+    ],
+)
+def test_conversation_title_uses_only_nonempty_user_text(messages, expected):
+    from dingent.server.api.routers.frontend.threads import update_conversation_title
+
+    conversation = Conversation(workspace_id=uuid.uuid4(), title="New Chat")
+    input_data = RunAgentInput(
+        threadId=str(conversation.id),
+        runId="title",
+        state={},
+        messages=[{"id": f"m-{i}", **message} for i, message in enumerate(messages)],
+        tools=[],
+        context=[],
+        forwardedProps={},
+    )
+    update_conversation_title(conversation, input_data)
+    assert conversation.title == expected
+    conversation.title = "My existing title"
+    update_conversation_title(conversation, input_data)
+    assert conversation.title == "My existing title"
+
+
+@pytest.mark.parametrize("with_text", [True, False])
+@pytest.mark.parametrize("legacy_binary", [True, False])
+def test_image_run_reaches_model_and_keeps_media_out_of_title(client: TestClient, session, mocker, with_text, legacy_binary):
+    from langchain_core.messages import HumanMessage
+
+    from dingent.core.llms import service as llm_service
+    from dingent.engine.agents.simple_agent import _convert_message_to_dict_with_reasoning_content
+    from dingent.server.api.routers.frontend import threads as chat_threads
+
+    received = []
+
+    class ImageModel(FakeMessagesListChatModelWithTools):
+        def _generate(self, messages, stop=None, run_manager=None, **kwargs):
+            received.append(messages)
+            return super()._generate(messages, stop=stop, run_manager=run_manager, **kwargs)
+
+    image_data = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6oY4AAAAASUVORK5CYII="
+    image = (
+        {"type": "binary", "mimeType": "image/png", "data": image_data}
+        if legacy_binary
+        else {"type": "image", "source": {"type": "data", "mimeType": "image/png", "value": image_data}, "metadata": {"filename": "screenshot.png"}}
+    )
+    content = [{"type": "text", "text": "Describe this image"}, image] if with_text else [image]
+    ws = _create_workspace(session=session, slug="ws-image-run", allow_guest_access=True)
+    thread_id = str(uuid.uuid4())
+    visitor_id = str(uuid.uuid4())
+    saver = InMemorySaver()
+    llm = ImageModel(responses=[AIMessage(content="Image received")])
+    agent_graph = build_simple_react_agent("agent", llm, tools=[], system_prompt="Describe the provided image")
+    graph = create_swarm(agents=[agent_graph], state_schema=MainState, default_active_agent="agent", context_schema=dict).compile(checkpointer=saver)
+    agent = DingLangGraphAGUIAgent(name="test", graph=graph)
+    sdk = mocker.Mock(checkpointer=saver, resolve_agent=mocker.AsyncMock(return_value=agent))
+    mocker.patch.object(llm_service, "get_llm_for_context", return_value=llm)
+    client.app.dependency_overrides[chat_threads.get_copilot_sdk] = lambda: sdk
+    headers = {"Accept": "text/event-stream", "X-Visitor-ID": visitor_id}
+    payload = {
+        "threadId": thread_id,
+        "runId": "image-run",
+        "state": {},
+        "messages": [{"id": "image-question", "role": "user", "content": content}],
+        "tools": [],
+        "context": [],
+        "forwardedProps": {},
+    }
+    response = client.post(f"/api/v1/{ws.slug}/chat/agent/default/run", json=payload, headers=headers)
+    assert response.status_code == 200
+    assert "RUN_ERROR" not in response.text
+    assert "RUN_FINISHED" in response.text
+    assert "Image received" in response.text
+    assert len(received) == 1
+    user_message = next(message for message in received[0] if isinstance(message, HumanMessage))
+    model_payload = _convert_message_to_dict_with_reasoning_content(user_message)
+    assert {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{image_data}"}} in model_payload["content"]
+    conversation = session.get(Conversation, uuid.UUID(thread_id))
+    assert conversation.title == ("Describe this image" if with_text else "New Chat")
+    restored = client.post(f"/api/v1/{ws.slug}/chat/agent/default/connect", json=payload, headers=headers)
+    assert restored.status_code == 200
+    assert image_data in restored.text
+    assert "Image received" in restored.text
+
+
 def test_run_streams_tool_call_events_for_frontend(client: TestClient, session, monkeypatch):
     ws = _create_workspace(session=session, slug="ws-tool-events", allow_guest_access=True)
     thread_id = str(uuid.uuid4())

@@ -67,10 +67,12 @@ export function ThinkingAssistantMessage(
         key={isRunning ? "running" : "complete"}
         content={thinkingContent}
         isThinking={isRunning}
-        defaultExpanded={false}
+        defaultExpanded={isRunning}
         steps={message.executionSteps}
         failed={message.executionFailed}
         stopped={message.executionStopped}
+        startedAt={message.executionStartedAt}
+        durationMs={message.executionDurationMs}
       />
 
       {(hasAnswer || hasToolCalls) && (

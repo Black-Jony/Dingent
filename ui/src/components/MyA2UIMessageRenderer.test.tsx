@@ -14,6 +14,8 @@ import {
 
 const processMessages = vi.fn();
 
+vi.mock("./A2UI/table-catalog", () => ({ tableCatalog: undefined }));
+
 vi.mock("@copilotkit/a2ui-renderer", () => ({
   A2UIProvider: ({ children }: { children: React.ReactNode }) => (
     <div data-testid="a2ui-provider">{children}</div>
@@ -42,6 +44,92 @@ vi.mock("./A2UI/data-table", () => ({
 }));
 
 describe("createA2UIMessageRenderer", () => {
+  it("renders every created surface in a multi-table response without duplicate panels", () => {
+    const Render = createA2UIMessageRenderer({}).render;
+    const operations = [
+      { createSurface: { surfaceId: "first-table" } },
+      { createSurface: { surfaceId: "second-table" } },
+    ];
+    render(
+      <Render
+        activityType="a2ui-surface"
+        content={{ a2ui_operations: operations, surfaceId: "second-table" }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+    expect(
+      screen.getAllByTestId("a2ui-renderer").map((node) => node.textContent),
+    ).toEqual(["first-table", "second-table"]);
+  });
+
+  it("keeps sibling tables during data-only updates and removes only explicitly deleted surfaces", () => {
+    const Render = createA2UIMessageRenderer({}).render;
+    const { rerender } = render(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          a2ui_operations: [
+            { createSurface: { surfaceId: "first" } },
+            { createSurface: { surfaceId: "second" } },
+          ],
+          surfaceId: "second",
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+    rerender(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          a2ui_operations: [
+            {
+              updateDataModel: {
+                surfaceId: "first",
+                path: "/rows/0",
+                value: { gene: "TP53" },
+              },
+            },
+          ],
+          surfaceId: "first",
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+    expect(
+      screen.getAllByTestId("a2ui-renderer").map((node) => node.textContent),
+    ).toEqual(["first", "second"]);
+    rerender(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          a2ui_operations: [{ deleteSurface: { surfaceId: "second" } }],
+          surfaceId: "second",
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+    expect(
+      screen.getAllByTestId("a2ui-renderer").map((node) => node.textContent),
+    ).toEqual(["first"]);
+    rerender(
+      <Render
+        activityType="a2ui-surface"
+        content={{
+          a2ui_operations: [{ deleteSurface: { surfaceId: "first" } }],
+          surfaceId: "first",
+        }}
+        message={{}}
+        agent={{}}
+      />,
+    );
+    expect(screen.queryByTestId("a2ui-renderer")).not.toBeInTheDocument();
+    expect(screen.queryByText(/missing/i)).not.toBeInTheDocument();
+  });
+
   it("routes official A2UI operations through the official provider and renderer", async () => {
     const renderer = createA2UIMessageRenderer({});
     const operations = [

@@ -261,6 +261,11 @@
       "summary": "Resumir los datos más importantes que este flujo de trabajo puede acceder.",
       "analysis": "Ejecutar un análisis enfocado y explicar el resultado."
     },
+    "genbaseStarter": {
+      "metadata": "Campos para el envío de metadatos y resolución de errores",
+      "featureTable": "Cómo rellenar las tablas de características de anotación y resolver errores",
+      "faq": "Respuestas a otras preguntas frecuentes"
+    },
     "analysisWorkspace": {
       "results": "Resultados del análisis",
       "expand": "Abrir en el espacio de trabajo de análisis",

@@ -11,18 +11,15 @@ import {
   useLayoutEffect,
   useRef,
   useId,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
-import { ColumnDef } from "@tanstack/react-table";
 import remarkGfm from "remark-gfm";
 import ReactMarkdown from "react-markdown";
 import { transformMarkdownUrl } from "@/lib/safe-urls";
 import {
   AlertCircle,
-  ArrowUpDown,
   Ban,
   ChevronDown,
   ChevronUp,
@@ -30,7 +27,8 @@ import {
   Maximize2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "./A2UI/data-table";
+import { ResultTable, TablePaginationContext } from "./A2UI/result-table";
+import { tableCatalog } from "./A2UI/table-catalog";
 import { ErrorBoundary } from "react-error-boundary";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
@@ -184,88 +182,6 @@ function AnalysisArtifactSurface({
   );
 }
 
-function normalizeTableContent(content: TableContent): TableContent {
-  const columns = Array.isArray(content.columns)
-    ? content.columns.map(String)
-    : [];
-  const rows = Array.isArray(content.rows)
-    ? content.rows.map((row) => {
-        if (Array.isArray(row)) {
-          return Object.fromEntries(
-            columns.map((column, index) => [column, row[index]]),
-          );
-        }
-
-        return row && typeof row === "object" ? row : {};
-      })
-    : [];
-
-  return { ...content, columns, rows };
-}
-
-function formatCellValue(value: unknown): string {
-  if (value == null) return "-";
-  if (typeof value === "object") {
-    try {
-      return JSON.stringify(value);
-    } catch {
-      return String(value);
-    }
-  }
-  return String(value);
-}
-
-function renderCellValue(value: unknown): ReactNode {
-  if (
-    value &&
-    typeof value === "object" &&
-    "href" in value &&
-    "text" in value
-  ) {
-    const href = String((value as { href: unknown }).href);
-    const text = String((value as { text: unknown }).text);
-    if (/^https?:\/\//i.test(href)) {
-      return (
-        <a
-          href={href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-blue-600 hover:underline"
-        >
-          {text}
-        </a>
-      );
-    }
-    return text;
-  }
-
-  const text = formatCellValue(value);
-  const linkPattern = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
-  const parts: ReactNode[] = [];
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = linkPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index));
-    parts.push(
-      <a
-        key={`${match.index}-${match[2]}`}
-        href={match[2]}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-600 hover:underline"
-      >
-        {match[1]}
-      </a>,
-    );
-    lastIndex = linkPattern.lastIndex;
-  }
-
-  if (parts.length === 0) return text;
-  if (lastIndex < text.length) parts.push(text.slice(lastIndex));
-  return parts;
-}
-
 function ErrorFallback({
   error,
   resetErrorBoundary,
@@ -296,57 +212,14 @@ function ErrorFallback({
 }
 
 function TableView({ data }: { data: TableContent }) {
-  const t = useTranslations("Renderer");
-  const normalizedData = useMemo(() => normalizeTableContent(data), [data]);
-  const { columns: rawColumns, rows, title } = normalizedData;
-
-  const safeColumns = useMemo<ColumnDef<any>[]>(() => {
-    try {
-      if (!rawColumns || !Array.isArray(rawColumns)) return [];
-
-      return rawColumns.map((colName) => ({
-        id: colName,
-        accessorFn: (row) => row[colName],
-        header: ({ column }) => (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-            className="-ml-3 h-8"
-          >
-            {colName}
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        ),
-        cell: ({ row }) => {
-          try {
-            const value = row.getValue(colName);
-            return <div className="font-medium">{renderCellValue(value)}</div>;
-          } catch (e) {
-            return <span className="text-red-400 text-xs">{t("error")}</span>;
-          }
-        },
-      }));
-    } catch (e) {
-      console.error("Error generating columns:", e);
-      return [];
-    }
-  }, [rawColumns, t]);
-
-  if (!rawColumns || rawColumns.length === 0) {
-    return <div className="p-4 text-gray-500 italic">{t("noColumns")}</div>;
-  }
-
   return (
-    <div className="w-full my-4 space-y-2">
-      {title && (
-        <h3 className="text-lg font-semibold tracking-tight px-1">{title}</h3>
-      )}
-      {safeColumns.length > 0 ? (
-        <DataTable columns={safeColumns} data={rows || []} />
-      ) : (
-        <div className="text-sm text-red-500">{t("couldNotRenderColumns")}</div>
-      )}
-    </div>
+    <ResultTable
+      data={{
+        ...data,
+        columns: Array.isArray(data.columns) ? data.columns : [],
+        rows: Array.isArray(data.rows) ? data.rows : [],
+      }}
+    />
   );
 }
 
@@ -605,27 +478,45 @@ const MarkdownView = memo(
 );
 MarkdownView.displayName = "MarkdownView";
 
-function getSurfaceId(content: OfficialA2UIContent) {
-  if (content.surfaceId) return content.surfaceId;
-
+function getSurfaceIds(content: OfficialA2UIContent) {
+  const ids = new Set<string>();
   for (const operation of content.a2ui_operations) {
     const surfaceId = operation.createSurface?.surfaceId;
-    if (typeof surfaceId === "string") return surfaceId;
+    if (typeof surfaceId === "string" && surfaceId) ids.add(surfaceId);
   }
-
-  return undefined;
+  if (typeof content.surfaceId === "string" && content.surfaceId)
+    ids.add(content.surfaceId);
+  return [...ids];
 }
 
 function OfficialA2UIRenderer({ content }: { content: OfficialA2UIContent }) {
   const t = useTranslations("Renderer");
   const { processMessages } = useA2UIActions();
-  const surfaceId = getSurfaceId(content);
+  const { a2ui_operations: operations, surfaceId } = content;
+  const [surfaceIds, setSurfaceIds] = useState(() => getSurfaceIds(content));
 
   useEffect(() => {
-    processMessages(content.a2ui_operations);
-  }, [content.a2ui_operations, processMessages]);
+    processMessages(operations);
+    setSurfaceIds((previous) => {
+      const next = new Set([
+        ...previous,
+        ...getSurfaceIds({ a2ui_operations: operations, surfaceId }),
+      ]);
+      for (const operation of operations) {
+        const removedId = operation.deleteSurface?.surfaceId;
+        if (typeof removedId === "string") next.delete(removedId);
+      }
+      const ids = [...next];
+      return ids.length === previous.length &&
+        ids.every((id, index) => id === previous[index])
+        ? previous
+        : ids;
+    });
+  }, [operations, surfaceId, processMessages]);
 
-  if (!surfaceId) {
+  if (!surfaceIds.length) {
+    if (content.a2ui_operations.some((operation) => operation.deleteSurface))
+      return null;
     return (
       <div className="p-4 border border-red-200 rounded text-red-500 flex items-center gap-2">
         <AlertCircle className="w-4 h-4" />
@@ -634,7 +525,13 @@ function OfficialA2UIRenderer({ content }: { content: OfficialA2UIContent }) {
     );
   }
 
-  return <A2UIRenderer surfaceId={surfaceId} />;
+  return (
+    <div className="min-w-0 space-y-4">
+      {surfaceIds.map((surfaceId) => (
+        <A2UIRenderer key={surfaceId} surfaceId={surfaceId} />
+      ))}
+    </div>
+  );
 }
 
 function OfficialA2UISurface({
@@ -645,9 +542,11 @@ function OfficialA2UISurface({
   theme?: any;
 }) {
   return (
-    <A2UIProvider theme={theme}>
-      <OfficialA2UIRenderer content={content} />
-    </A2UIProvider>
+    <TablePaginationContext.Provider value="local">
+      <A2UIProvider theme={theme} catalog={tableCatalog}>
+        <OfficialA2UIRenderer content={content} />
+      </A2UIProvider>
+    </TablePaginationContext.Provider>
   );
 }
 

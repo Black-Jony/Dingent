@@ -10,6 +10,7 @@ from dingent.engine.agents.simple_agent import (
     DingMiddleware,
     _plain_object_to_table_display,
     _structured_data_model_text,
+    _table_rows_to_records,
     mcp_artifact_to_agui_display,
 )
 
@@ -36,6 +37,104 @@ def test_mcp_artifact_to_agui_display_builds_official_a2ui_operations():
     assert data["columns"] == ["id", "name", "active", "score"]
     assert data["rows"] == [{"id": 1, "name": "Alice", "active": True, "score": 95.5}, {"id": 2, "name": "Bob", "active": False, "score": 88.0}]
     assert data["pageInfo"] == "Page 1"
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        ["TWAS001", "Synthetic TP53 association", "TP53 result", "association", "https://example.org/TWAS001"],
+        {
+            "accession": "TWAS001",
+            "title": "TP53 result",
+            "definition": "Synthetic TP53 association",
+            "url": "https://example.org/TWAS001",
+            "dataType": "association",
+        },
+    ],
+    ids=["array-row", "object-row-with-different-key-order"],
+)
+def test_table_display_matches_cell_values_to_column_order(row):
+    columns = ["accession", "definition", "title", "dataType", "url"]
+    artifact = [{"type": "table", "title": "TWAS Atlas Results", "columns": columns, "rows": [row]}]
+    original = json.dumps(artifact)
+
+    result = mcp_artifact_to_agui_display("search_twas", {}, "twas", artifact)
+
+    operations = result[0]["a2ui_operations"]
+    components = {component["id"]: component for component in operations[1]["updateComponents"]["components"]}
+    expected = ["TWAS001", "Synthetic TP53 association", "TP53 result", "association", "https://example.org/TWAS001"]
+    assert [components[f"header_{index}"]["text"] for index in range(len(columns))] == columns
+    assert [components[f"row_0_cell_{index}"]["text"] for index in range(len(columns))] == expected
+    assert operations[2]["updateDataModel"]["value"]["rows"] == [dict(zip(columns, expected, strict=True))]
+    assert json.dumps(artifact) == original
+
+
+def test_table_rows_keep_object_values_and_support_mixed_row_formats():
+    columns = ["name", "count", "active", "detail", "missing"]
+    detail = {"gene": "TP53"}
+    rows = [{"active": False, "count": 0, "name": "First", "detail": detail}, ["Second", 1, True, None, "Last"]]
+
+    records = _table_rows_to_records(columns, rows)
+
+    assert records == [
+        {"name": "First", "count": 0, "active": False, "detail": detail, "missing": ""},
+        {"name": "Second", "count": 1, "active": True, "detail": None, "missing": "Last"},
+    ]
+    assert _table_rows_to_records(columns, []) == []
+
+
+def test_table_data_updates_preserve_object_row_values():
+    artifact = [{"type": "table", "columns": ["accession", "title"], "rows": [{"title": "TP53 result", "accession": "TWAS001"}]}]
+
+    result = mcp_artifact_to_agui_display("search_twas", {"page": 2}, "twas", artifact, update_data=True)
+
+    data = result[0]["a2ui_operations"][0]["updateDataModel"]["value"]
+    assert data["rows"] == [{"accession": "TWAS001", "title": "TP53 result"}]
+    assert data["pageInfo"] == "Page 2"
+
+
+def test_table_cells_encode_nested_values_as_json_and_keep_model_values():
+    nested = {"gene": "TP53", "active": False, "count": 0, "missing": None}
+    artifact = [{"type": "table", "columns": ["detail", "empty"], "rows": [{"detail": nested, "empty": None}]}]
+
+    result = mcp_artifact_to_agui_display("search", {}, "nested", artifact)
+
+    operations = result[0]["a2ui_operations"]
+    components = {component["id"]: component for component in operations[1]["updateComponents"]["components"]}
+    assert json.loads(components["row_0_cell_0"]["text"]) == nested
+    assert components["row_0_cell_1"]["text"] == ""
+    assert operations[2]["updateDataModel"]["value"]["rows"] == [{"detail": nested, "empty": None}]
+
+
+@pytest.mark.parametrize("page,previous,following", [(1, 1, 2), (2, 1, 3), (3, 2, 4)])
+def test_table_pagination_actions_use_adjacent_pages(page, previous, following):
+    artifact = [{"type": "table", "columns": ["id"], "rows": [[1]]}]
+    result = mcp_artifact_to_agui_display("search", {"page": page, "gene": "TP53"}, "paging", artifact)
+    components = {component["id"]: component for component in result[0]["a2ui_operations"][1]["updateComponents"]["components"]}
+
+    for button, expected in [("prevBtn", previous), ("nextBtn", following)]:
+        event = components[button]["action"]["event"]
+        assert event["name"] == "search"
+        assert event["context"]["query_args"] == {"page": expected, "gene": "TP53"}
+
+
+def test_table_display_keeps_undeclared_object_fields_and_array_values():
+    artifact = [{"type": "table", "columns": ["gene"], "rows": [{"gene": "TP53", "count": 0}, ["BRCA1", False]]}]
+    original = json.dumps(artifact)
+    result = mcp_artifact_to_agui_display("search", {}, "extra", artifact)
+    data = result[0]["a2ui_operations"][2]["updateDataModel"]["value"]
+    assert data["columns"] == ["gene", "column_2", "count"]
+    assert data["rows"][0]["count"] == 0
+    assert data["rows"][1]["column_2"] is False
+    assert json.dumps(artifact) == original
+
+
+def test_table_display_disambiguates_duplicate_columns_without_shifting_values():
+    artifact = [{"type": "table", "columns": ["id", "id", "gene"], "rows": [["first", "second", "TP53"]]}]
+    result = mcp_artifact_to_agui_display("search", {}, "duplicate", artifact)
+    data = result[0]["a2ui_operations"][2]["updateDataModel"]["value"]
+    assert data["columns"] == ["id", "id (2)", "gene"]
+    assert data["rows"] == [{"id": "first", "id (2)": "second", "gene": "TP53"}]
 
 
 def test_mcp_artifact_to_agui_display_keeps_markdown_payload_for_client_renderer():

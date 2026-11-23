@@ -1,5 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
+import type { RunAgentInput } from "@ag-ui/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatPage } from "./ChatPage";
 import type { ExecutionTraceData } from "./ThinkingAccordion";
@@ -27,11 +28,12 @@ let copilotIsRunning = false;
 let historyIsLoading = false;
 let currentSearchParams = new URLSearchParams();
 let agentSubscriber: {
+  onRunInitialized?: (params: { input: RunAgentInput }) => undefined;
   onToolCallStartEvent?: (input: { event: any }) => undefined;
   onActivitySnapshotEvent?: (input: { event: any }) => undefined;
-  onRunFinalized?: () => undefined;
-  onRunFailed?: () => undefined;
-  onEvent: (input: { event: any }) => undefined;
+  onRunFinalized?: (params?: { input: RunAgentInput }) => undefined;
+  onRunFailed?: (params?: { input: RunAgentInput }) => undefined;
+  onEvent: (params: { event: any; input?: RunAgentInput }) => undefined;
 } | null = null;
 type ToolCallRenderer = (input: {
   status: string;
@@ -271,7 +273,91 @@ describe("ChatPage", () => {
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(screen.getByTestId("message-view")).toHaveTextContent("Done");
   });
+  it("does not duplicate real reasoning when a final snapshot contains the same text", () => {
+    const { rerender } = render(<ChatPage />);
+    act(() => {
+      agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+      agentSubscriber?.onEvent({
+        event: {
+          type: "THINKING_TEXT_MESSAGE_CONTENT",
+          delta: "Check the evidence.",
+        },
+      });
+    });
+    agentMessages = [
+      { id: "user-1", role: "user", content: "Run the tool" },
+      {
+        id: "assistant-final",
+        role: "assistant",
+        content: "<thinking>Check the evidence.</thinking>Final answer",
+      },
+    ];
+    rerender(<ChatPage />);
+    act(() => agentSubscriber?.onEvent({ event: { type: "RUN_FINISHED" } }));
+    const text = screen.getByTestId("message-view").textContent || "";
+    expect(text.match(/Check the evidence\./g)).toHaveLength(1);
+    expect(text).toContain("Final answer");
+    expect(agentMessages[1].content).toContain("<thinking>");
+  });
 
+  it("does not put any tool or activity text into the model's reasoning", () => {
+    render(<ChatPage />);
+    act(() => {
+      agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+      agentSubscriber?.onEvent({
+        event: {
+          type: "THINKING_TEXT_MESSAGE_CONTENT",
+          delta: "Only the model's own text.",
+        },
+      });
+      agentSubscriber?.onToolCallStartEvent?.({
+        event: { toolCallId: "lookup", toolCallName: "lookup_records" },
+      });
+      agentSubscriber?.onActivitySnapshotEvent?.({
+        event: {
+          messageId: "lookup:activity",
+          content: { title: "Retrieved records" },
+        },
+      });
+    });
+    expect(screen.getByTestId("message-view")).toHaveTextContent(
+      "<thinking>Only the model's own text.</thinking>",
+    );
+    expect(renderedTrace?.executionSteps).toMatchObject([
+      {
+        id: "lookup",
+        label: "lookup records",
+        detail: "Retrieved records",
+        status: "complete",
+      },
+    ]);
+  });
+
+  it("freezes duration on a terminal event and clears it for the next conversation", () => {
+    const clock = vi.spyOn(Date, "now");
+    try {
+      clock.mockReturnValue(10000);
+      const { rerender } = render(<ChatPage />);
+      act(() => {
+        agentSubscriber?.onEvent({ event: { type: "RUN_STARTED" } });
+        agentSubscriber?.onEvent({
+          event: { type: "THINKING_TEXT_MESSAGE_CONTENT", delta: "Reasoning" },
+        });
+      });
+      clock.mockReturnValue(14500);
+      act(() => agentSubscriber?.onEvent({ event: { type: "RUN_FINISHED" } }));
+      expect(renderedTrace?.executionDurationMs).toBe(4500);
+      clock.mockReturnValue(20000);
+      act(() => agentSubscriber?.onRunFinalized?.());
+      expect(renderedTrace?.executionDurationMs).toBe(4500);
+      activeThreadId = "next-thread";
+      agentMessages = [];
+      rerender(<ChatPage />);
+      expect(renderedTrace).toBeUndefined();
+    } finally {
+      clock.mockRestore();
+    }
+  });
   afterEach(() => {
     historyIsLoading = false;
     window.localStorage.removeItem("dingent.debugActivitySnapshot");
@@ -384,6 +470,63 @@ describe("ChatPage", () => {
       });
     });
     expect(renderedTrace?.executionSteps?.[0].status).toBe("complete");
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+  });
+
+  it("waits immediately on submission after history, before any server event, including follow-ups", () => {
+    render(<ChatPage />);
+    const input: RunAgentInput = {
+      threadId: "thread-1",
+      runId: "first-submission",
+      messages: [{ id: "question", role: "user", content: "Hello" }],
+      state: {},
+      tools: [],
+      context: [],
+      forwardedProps: {},
+    };
+    act(() => agentSubscriber?.onRunFinalized?.());
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+    act(() => agentSubscriber?.onRunInitialized?.({ input }));
+    expect(screen.getByTestId("running-indicator")).toBeInTheDocument();
+    expect(renderedTrace).toBeUndefined();
+    act(() => agentSubscriber?.onRunFinalized?.({ input }));
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+
+    const followUp = { ...input, runId: "follow-up" };
+    act(() => agentSubscriber?.onRunInitialized?.({ input: followUp }));
+    expect(screen.getByTestId("running-indicator")).toBeInTheDocument();
+    act(() => {
+      agentSubscriber?.onRunFinalized?.({ input });
+      agentSubscriber?.onRunFailed?.({ input });
+      agentSubscriber?.onEvent({ event: { type: "RUN_FINISHED" }, input });
+    });
+    expect(screen.getByTestId("running-indicator")).toBeInTheDocument();
+    act(() => agentSubscriber?.onRunFailed?.({ input: followUp }));
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+  });
+
+  it("does not start waiting for history initialization or a different conversation", () => {
+    render(<ChatPage />);
+    const input: RunAgentInput = {
+      threadId: "thread-1",
+      runId: "history",
+      messages: [],
+      state: {},
+      tools: [],
+      context: [],
+      forwardedProps: {},
+    };
+    act(() => agentSubscriber?.onRunInitialized?.({ input }));
+    expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
+    act(() =>
+      agentSubscriber?.onRunInitialized?.({
+        input: {
+          ...input,
+          threadId: "other-thread",
+          messages: [{ id: "other", role: "user", content: "Not here" }],
+        },
+      }),
+    );
     expect(screen.queryByTestId("running-indicator")).not.toBeInTheDocument();
   });
 
@@ -542,8 +685,7 @@ describe("ChatPage", () => {
         event: { type: "RUN_STARTED", runId: "next-run" },
       });
     });
-    expect(renderedTrace?.executionStopped).toBe(false);
-    expect(renderedTrace?.executionSteps).toHaveLength(0);
+    expect(renderedTrace).toBeUndefined();
     expect(screen.getByTestId("running-indicator")).toBeInTheDocument();
   });
 
@@ -781,7 +923,11 @@ describe("ChatPage", () => {
       }),
     );
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(messageText).toContain("Using tool: generate gwas sankey");
+    expect(messageText).toContain("<thinking>thinking</thinking>");
+    expect(messageText).not.toContain("Using tool:");
+    expect(renderedTrace?.executionSteps?.[0].label).toBe(
+      "generate gwas sankey",
+    );
     expect(messageText.indexOf("<thinking>")).toBeLessThan(
       messageText.indexOf("activity-live:live table"),
     );
@@ -815,8 +961,15 @@ describe("ChatPage", () => {
     });
 
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(messageText).toContain("Using tool: list annotation databases");
-    expect(messageText).toContain("Received result: list annotation databases");
+    expect(renderedTrace?.executionSteps).toMatchObject([
+      {
+        id: "call-databases",
+        label: "list annotation databases",
+        status: "complete",
+      },
+    ]);
+    expect(messageText).not.toContain("Using tool:");
+    expect(messageText).not.toContain("Received result:");
     expect(messageText).not.toContain("Received result: a2ui-surface");
   });
 
@@ -847,9 +1000,11 @@ describe("ChatPage", () => {
     });
 
     const messageText = screen.getByTestId("message-view").textContent || "";
-    expect(
-      messageText.match(/Received result: query database record/g),
-    ).toHaveLength(1);
+    expect(renderedTrace?.executionSteps).toHaveLength(1);
+    expect(renderedTrace?.executionSteps?.[0]).toMatchObject({
+      label: "query database record",
+      status: "complete",
+    });
     expect(messageText).not.toContain("Received result: a2ui-surface");
     for (let index = 0; index < 4; index += 1) {
       expect(messageText).toContain(`call-tables:activity:${index}:`);
@@ -878,7 +1033,7 @@ describe("ChatPage", () => {
     expect(messageText).toContain("unassociated-activity:");
   });
 
-  it("shows only a temporary loader for a tool-free run and removes it on completion", () => {
+  it("never inserts an empty thinking panel for a tool-free run", () => {
     render(<ChatPage />);
 
     act(() => {
@@ -886,7 +1041,7 @@ describe("ChatPage", () => {
         event: { type: "RUN_STARTED", runId: "run-without-details" },
       });
     });
-    expect(screen.getByTestId("message-view")).toHaveTextContent(
+    expect(screen.getByTestId("message-view")).not.toHaveTextContent(
       "<thinking></thinking>",
     );
     expect(screen.getByTestId("message-view")).not.toHaveTextContent(
@@ -954,9 +1109,7 @@ describe("ChatPage", () => {
         },
       });
     });
-    expect(screen.getByTestId("message-view")).toHaveTextContent(
-      "Using tool: previous tool",
-    );
+    expect(renderedTrace?.executionSteps?.[0].label).toBe("previous tool");
 
     agentMessages = [];
     activeThreadId = "thread-empty";
@@ -980,6 +1133,37 @@ describe("ChatPage", () => {
     await waitFor(() => {
       expect(addMessage).toHaveBeenCalledWith(
         expect.objectContaining({ role: "user" }),
+      );
+      expect(runAgent).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows and sends GenBase starters only for the GenBase workflow", async () => {
+    agentMessages = [];
+    const { rerender } = render(<ChatPage />);
+    expect(
+      screen.getByRole("button", {
+        name: "Show me what workflow-agent can do with the available data.",
+      }),
+    ).toBeInTheDocument();
+
+    workflowName = "GenBase";
+    rerender(<ChatPage />);
+
+    const prompts = [
+      "Metadata submission fields and error troubleshooting",
+      "Filling in annotation feature tables and troubleshooting errors",
+      "Answers to other frequently asked questions",
+    ];
+    expect(screen.getAllByRole("button")).toHaveLength(prompts.length);
+    for (const prompt of prompts) {
+      expect(screen.getByRole("button", { name: prompt })).toBeInTheDocument();
+    }
+
+    screen.getByRole("button", { name: prompts[0] }).click();
+    await waitFor(() => {
+      expect(addMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ role: "user", content: prompts[0] }),
       );
       expect(runAgent).toHaveBeenCalledTimes(1);
     });

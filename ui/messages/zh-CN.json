@@ -261,6 +261,11 @@
       "summary": "总结这个工作流能够访问的关键数据。",
       "analysis": "执行一次聚焦分析并解释结果。"
     },
+    "genbaseStarter": {
+      "metadata": "元数据汇交字段解读和报错问题解答",
+      "featureTable": "注释特征表格填写和报错解答",
+      "faq": "其他常见问题解答"
+    },
     "analysisWorkspace": {
       "results": "分析结果",
       "expand": "在分析工作区中展开",

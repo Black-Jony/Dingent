@@ -238,8 +238,7 @@ def mcp_artifact_to_agui_display(
 
 
 def _build_table_components(tool_name: str, query_args: dict[str, Any], item: dict[str, Any]) -> list[dict[str, Any]]:
-    columns = [str(column) for column in item.get("columns", [])]
-    rows = _table_rows_to_records(columns, item.get("rows", []))
+    columns, rows = _normalize_table(item)
     title = str(item.get("title") or "Table Data")
     page_number = int(query_args.get("page", 1))
 
@@ -248,14 +247,19 @@ def _build_table_components(tool_name: str, query_args: dict[str, Any], item: di
         {"id": "tableTitle", "component": "Text", "text": title, "variant": "h3"},
         {"id": "tableHeader", "component": "Row", "children": [f"header_{idx}" for idx in range(len(columns))], "justify": "spaceBetween", "align": "center"},
         {"id": "paginationRow", "component": "Row", "children": ["prevBtn", "pageInfo", "nextBtn"], "justify": "center", "align": "center"},
-        {"id": "prevBtn", "component": "Button", "child": "prevBtnText", "action": {"event": {"name": tool_name, "context": {"query_args": {**query_args, "page": page_number}}}}},
+        {
+            "id": "prevBtn",
+            "component": "Button",
+            "child": "prevBtnText",
+            "action": {"event": {"name": tool_name, "context": {"query_args": {**query_args, "page": max(1, page_number - 1)}}}},
+        },
         {"id": "prevBtnText", "component": "Text", "text": "Previous"},
         {"id": "pageInfo", "component": "Text", "text": f"Page {page_number}", "variant": "caption"},
         {
             "id": "nextBtn",
             "component": "Button",
             "child": "nextBtnText",
-            "action": {"event": {"name": tool_name, "context": {"query_args": {**query_args, "page": page_number + 2}}}},
+            "action": {"event": {"name": tool_name, "context": {"query_args": {**query_args, "page": page_number + 1}}}},
         },
         {"id": "nextBtnText", "component": "Text", "text": "Next"},
     ]
@@ -268,27 +272,56 @@ def _build_table_components(tool_name: str, query_args: dict[str, Any], item: di
         for col_idx, column in enumerate(columns):
             cell_id = f"row_{row_idx}_cell_{col_idx}"
             row_child_ids.append(cell_id)
-            components.append({"id": cell_id, "component": "Text", "text": str(row.get(column, ""))})
+            components.append({"id": cell_id, "component": "Text", "text": _format_table_value(row.get(column, ""))})
         components.append({"id": f"row_{row_idx}", "component": "Row", "children": row_child_ids, "justify": "spaceBetween", "align": "center"})
 
     return components
 
 
 def _build_table_data(item: dict[str, Any], query_args: dict[str, Any]) -> dict[str, Any]:
-    columns = [str(column) for column in item.get("columns", [])]
+    columns, rows = _normalize_table(item)
     page_number = int(query_args.get("page", 1))
     return {
         "title": str(item.get("title") or "Table Data"),
         "columns": columns,
-        "rows": _table_rows_to_records(columns, item.get("rows", [])),
+        "rows": rows,
         "pageInfo": f"Page {page_number}",
         "isFirstPage": page_number <= 1,
         "isLastPage": False,
     }
 
 
-def _table_rows_to_records(columns: list[str], rows: list[list[str | int | Any]]) -> list[dict[str, Any]]:
-    return [dict(zip(columns, row_data, strict=False)) for row_data in rows]
+def _table_rows_to_records(columns: list[str], rows: list[list[Any] | dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {**{column: row_data.get(column, "") for column in columns}, **row_data} if isinstance(row_data, dict) else dict(zip(columns, row_data, strict=False)) for row_data in rows
+    ]
+
+
+def _normalize_table(item: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+    raw_columns = [str(column) for column in item.get("columns") or []]
+    rows = item.get("rows") or []
+    object_fields = list(dict.fromkeys(key for row in rows if isinstance(row, dict) for key in row))
+    reserved = set(raw_columns) | set(object_fields)
+    columns: list[str] = []
+
+    def append_column(name: str, *, generated: bool = False) -> None:
+        candidate = name
+        number = 2
+        while candidate in columns or (candidate in reserved and (generated or candidate != name)):
+            candidate = f"{name} ({number})"
+            number += 1
+        columns.append(candidate)
+
+    for column in raw_columns:
+        append_column(column)
+    width = max((len(row) for row in rows if isinstance(row, list)), default=0)
+    while len(columns) < width:
+        append_column(f"column_{len(columns) + 1}", generated=True)
+    records = _table_rows_to_records(columns, rows)
+    for field in object_fields:
+        if field not in columns:
+            columns.append(field)
+    return columns, records
 
 
 def _normalize_openai_content_blocks(message: AnyMessage) -> AnyMessage:
