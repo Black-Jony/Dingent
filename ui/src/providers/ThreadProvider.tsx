@@ -119,11 +119,10 @@ export function ThreadProvider({ children, visitorId }: ThreadProviderProps) {
 
       // 恢复上次选中的 ID
       const searchParams = new URLSearchParams(window.location.search);
-      const isExternalLaunch =
-        searchParams.has("workflow") || searchParams.has("query");
+      const launchQuery = searchParams.get("query")?.trim();
       const lastActiveId = localStorage.getItem(currentThreadStorageKey);
 
-      if (isExternalLaunch) {
+      if (launchQuery) {
         createNewLocalThread();
       } else if (
         lastActiveId &&

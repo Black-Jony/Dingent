@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from dataclasses import asdict, is_dataclass
@@ -482,9 +483,13 @@ class DingLangGraphAGUIAgent(LangGraphAGUIAgent):
         )
 
     async def prepare_stream(self, input: RunAgentInput, agent_state, config):
+        props = input.forwarded_props or {}
+        raw_database = props.get("database")
+        database = raw_database.strip() if isinstance(raw_database, str) else ""
         config["configurable"] = {
             **config.get("configurable", {}),
-            "response_locale": normalize_response_locale((input.forwarded_props or {}).get("response_locale")),
+            "response_locale": normalize_response_locale(props.get("response_locale")),
+            "search_database": database if re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", database) else None,
         }
         previous_count = len(agent_state.values.get("messages", []))
         agent_state.values["messages"] = [msg for msg in agent_state.values.get("messages", []) if msg.type != "activity"]

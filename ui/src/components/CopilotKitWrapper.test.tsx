@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const controls = vi.hoisted(() => ({
   locale: "en",
+  searchParams: new URLSearchParams(),
   providerProperties: {} as Record<string, unknown>,
   auth: {
     accessToken: "test-token" as string | null,
@@ -14,6 +15,7 @@ const controls = vi.hoisted(() => ({
 vi.mock("next-intl", () => ({ useLocale: () => controls.locale }));
 vi.mock("next/navigation", () => ({
   useParams: () => ({ slug: "test-workspace" }),
+  useSearchParams: () => controls.searchParams,
 }));
 vi.mock("@/store", () => ({
   useAuthStore: (selector: (state: typeof controls.auth) => unknown) =>
@@ -44,6 +46,7 @@ import { CopilotKitWrapper } from "./CopilotKitWrapper";
 afterEach(() => {
   cleanup();
   controls.locale = "en";
+  controls.searchParams = new URLSearchParams();
   controls.auth.accessToken = "test-token";
   controls.providerProperties = {};
 });
@@ -74,5 +77,21 @@ describe("chat response language", () => {
     render(<CopilotKitWrapper isGuest>Chat</CopilotKitWrapper>);
     expect(controls.providerProperties.response_locale).toBe("ar");
     expect(controls.providerProperties.is_guest).toBe(true);
+  });
+});
+
+describe("chat database query parameter", () => {
+  it("forwards the current database and clears it when removed", () => {
+    controls.searchParams = new URLSearchParams("workflow=bing_search&database=%20bioproject%20");
+    const view = render(<CopilotKitWrapper>Chat</CopilotKitWrapper>);
+    expect(controls.providerProperties.database).toBe("bioproject");
+
+    controls.searchParams = new URLSearchParams("workflow=bing_search&database=biosample");
+    view.rerender(<CopilotKitWrapper>Chat</CopilotKitWrapper>);
+    expect(controls.providerProperties.database).toBe("biosample");
+
+    controls.searchParams = new URLSearchParams("workflow=bing_search");
+    view.rerender(<CopilotKitWrapper>Chat</CopilotKitWrapper>);
+    expect(controls.providerProperties).not.toHaveProperty("database");
   });
 });

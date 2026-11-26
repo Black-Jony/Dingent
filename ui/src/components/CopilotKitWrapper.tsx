@@ -13,7 +13,7 @@ const customMessageRenderers = [answerCopyRenderer];
 
 export const dynamic = "force-dynamic";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { getOrSetVisitorId } from "@/lib/utils";
 
 function CopilotKitContent({
@@ -28,6 +28,7 @@ function CopilotKitContent({
   isGuest: boolean;
 }) {
   const locale = useLocale();
+  const database = useSearchParams().get("database")?.trim();
   const activityRenderers = useMemo(() => {
     return [createA2UIMessageRenderer({ theme })];
   }, []);
@@ -69,6 +70,7 @@ function CopilotKitContent({
         workspace_slug: slug,
         is_guest: isGuest,
         response_locale: locale,
+        ...(database ? { database } : {}),
       }}
     >
       {children}

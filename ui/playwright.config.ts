@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { localeCookieName } from "./src/i18n/config";
 
 const backendPort = Number(process.env.E2E_BACKEND_PORT ?? 8765);
 const frontendPort = Number(process.env.E2E_FRONTEND_PORT ?? 3100);
@@ -13,6 +14,21 @@ export default defineConfig({
   },
   use: {
     baseURL: `${frontendURL}/dingent-resource`,
+    storageState: {
+      cookies: [
+        {
+          name: localeCookieName,
+          value: "en",
+          domain: new URL(frontendURL).hostname,
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
     trace: "retain-on-failure",
   },
   webServer: [

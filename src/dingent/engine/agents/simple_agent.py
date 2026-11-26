@@ -381,9 +381,10 @@ class DingMiddleware(AgentMiddleware):
         )
         request = request.override(messages=filtered_messages, model_settings=model_settings)
         try:
-            response_locale = normalize_response_locale(get_config().get("configurable", {}).get("response_locale"))
+            run_config = get_config().get("configurable", {})
         except RuntimeError:
-            response_locale = None
+            run_config = {}
+        response_locale = normalize_response_locale(run_config.get("response_locale"))
         if response_locale:
             # Reinforce the selection for tool-enabled endpoints without changing stored messages.
             for index in range(len(filtered_messages) - 1, -1, -1):
@@ -391,6 +392,18 @@ class DingMiddleware(AgentMiddleware):
                     filtered_messages[index] = with_response_language_hint(filtered_messages[index], response_locale)
                     break
             request = request.override(messages=filtered_messages, system_message=with_response_language(request.system_message, response_locale))
+
+        if database := run_config.get("search_database"):
+            hint = f"For this turn, search the {database} database. If the search tool accepts dbCode, use '{database}'."
+            system = request.system_message
+            if system is None:
+                system = SystemMessage(content=hint)
+            else:
+                content = system.content
+                updated = f"{content}\n\n{hint}" if isinstance(content, str) else [*content, {"type": "text", "text": hint}]
+                system = system.model_copy(update={"content": updated})
+            request = request.override(system_message=system)
+
         try:
             result = await handler(request)
         except Exception:

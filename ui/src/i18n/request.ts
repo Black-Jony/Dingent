@@ -41,7 +41,7 @@ export default getRequestConfig(async () => {
   return {
     locale,
     messages:
-      locale === defaultLocale
+      locale === "en"
         ? englishMessages
         : mergeMessages(englishMessages, localizedMessages),
   };
